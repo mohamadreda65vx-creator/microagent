@@ -23,7 +23,8 @@ The two browser scripts were run by hand and are **not** committed as automated 
 
 **Dashboard**
 - Sidebar (desktop) / drawer (mobile), top navigation with user menu, responsive layout, loading skeletons, empty and error states, toasts.
-- All 12 sections exist in navigation. **Working with real data:** Overview, AI Employees (create / edit / delete), Team (invite, change role, disable, revoke), Settings. **Placeholders:** Conversations, Channels, Customers, Campaigns, Business Knowledge, Workflow Builder, Teach & Correct, Performance — each shows an honest "Coming in a later phase" state, no fake numbers.
+- Collapsible sidebar (state remembered in the browser). Browser-tested: collapse, persist after reload, expand, navigation, mobile layout of the two new pages.
+- All 12 sections exist in navigation. **Working with real data:** Overview, AI Employees (create / edit / delete), Team (invite, change role, disable, revoke), Settings. **Layout only (empty states):** Conversations, Workflow Builder. **Placeholders:** Channels, Customers, Campaigns, Business Knowledge, Teach & Correct, Performance — each shows an honest "Coming in a later phase" state, no fake numbers.
 
 **Authentication**
 - Sign up (creates business + owner), login, logout (server-side revocation), password reset (single-use, 1 h), invitation acceptance, protected routes (client and API).
@@ -38,7 +39,7 @@ The two browser scripts were run by hand and are **not** committed as automated 
 
 ## Not completed / known gaps (be aware before Part 2)
 
-1. **Reference images were not received.** The dashboard design follows the brief and the palette, not your reference images. Send them and I will align the layout.
+1. **Reference images (received later, applied):** the sidebar is collapsible to an icon rail; **Conversations** uses the 3-pane inbox layout (views → list → thread); **Workflow Builder** has a dark toolbar, Nodes Library and a dotted canvas. These two pages are **layout only**: no messaging or workflow engine exists yet, so they show empty states (no sample conversations or workflows). Same visual spirit, MicroAgent palette and original artwork — nothing copied from the references.
 2. **Not deployed to a real Hostinger server.** Hostinger Web/Cloud plans do not support PostgreSQL (per their support docs); a **VPS is required**. The deploy guide was written but not executed on Hostinger.
 3. **Email delivery is untested against a real SMTP server.** Without `SMTP_HOST` emails go to an `email_outbox` table (dev only). Reset/invite flows are tested through that outbox.
 4. **UI paths not covered by browser tests:** Team page actions, invitation acceptance screen, password-reset screens, Settings. Their API behaviour is covered by the 35 API tests; the screens themselves were type-checked and built but not clicked through.

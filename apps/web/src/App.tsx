@@ -6,10 +6,12 @@ import Landing from './pages/Landing';
 import { AcceptInvite, ForgotPassword, Login, ResetPassword, Signup } from './pages/auth/AuthPages';
 import Companies from './pages/admin/Companies';
 import AiEmployees from './pages/app/AiEmployees';
+import Conversations from './pages/app/Conversations';
 import Overview from './pages/app/Overview';
 import Planned from './pages/app/Planned';
 import Settings from './pages/app/Settings';
 import Team from './pages/app/Team';
+import Workflows from './pages/app/Workflows';
 
 function NotFound() {
   return (
@@ -40,7 +42,9 @@ export default function App() {
           <Route path="ai-employees" element={<RequirePermission permission="ai_employees:read"><AiEmployees /></RequirePermission>} />
           <Route path="team" element={<RequirePermission permission="team:read"><Team /></RequirePermission>} />
           <Route path="settings" element={<RequirePermission permission="settings:read"><Settings /></RequirePermission>} />
-          {NAV.filter((n) => n.planned).map((n) => (
+          <Route path="conversations" element={<Conversations />} />
+          <Route path="workflows" element={<Workflows />} />
+          {NAV.filter((n) => n.planned && !['/app/conversations', '/app/workflows'].includes(n.to)).map((n) => (
             <Route key={n.to} path={n.to.replace('/app/', '')} element={<Planned />} />
           ))}
           <Route path="*" element={<Navigate to="/app" replace />} />

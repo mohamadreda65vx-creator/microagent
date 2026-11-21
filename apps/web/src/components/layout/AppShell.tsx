@@ -1,10 +1,10 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronDown, LogOut, Menu, Settings, ShieldCheck, X } from 'lucide-react';
+import { ChevronDown, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { useAuth } from '../../lib/auth';
-import { Logo } from '../brand/Logo';
+import { Logo, LogoMark } from '../brand/Logo';
 import { Badge } from '../ui/primitives';
 import { NAV } from './nav';
 
@@ -14,47 +14,59 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join('') || '?';
 }
 
-function SidebarLinks({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed: boolean }) {
   const { can, me } = useAuth();
   const items = me?.user.role === 'platform_admin' ? [] : NAV.filter((n) => can(n.permission));
   return (
     <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4" aria-label="Main">
       {me?.user.role === 'platform_admin' ? (
-        <NavLink to="/admin" end onClick={onNavigate} className={({ isActive }) => linkCls(isActive)}>
-          <ShieldCheck className="size-[18px]" strokeWidth={1.8} /> Companies
+        <NavLink to="/admin" end onClick={onNavigate} title={collapsed ? 'Companies' : undefined} aria-label="Companies" className={({ isActive }) => linkCls(isActive, collapsed)}>
+          <ShieldCheck className="size-[18px]" strokeWidth={1.8} /> {collapsed ? null : 'Companies'}
         </NavLink>
       ) : null}
       {items.map((n) => (
-        <NavLink key={n.to} to={n.to} end={n.end} onClick={onNavigate} className={({ isActive }) => linkCls(isActive)}>
+        <NavLink key={n.to} to={n.to} end={n.end} onClick={onNavigate} title={collapsed ? n.label : undefined} aria-label={n.label} className={({ isActive }) => linkCls(isActive, collapsed)}>
           <n.icon className="size-[18px] shrink-0" strokeWidth={1.8} />
-          <span className="flex-1 truncate">{n.label}</span>
-          {n.planned ? <span className="size-1.5 shrink-0 rounded-full bg-burgundy-400" title="Coming in a later phase" aria-label="Coming soon" /> : null}
+          {collapsed ? null : <span className="flex-1 truncate">{n.label}</span>}
+          {n.planned && !collapsed ? <span className="size-1.5 shrink-0 rounded-full bg-burgundy-400" title="Coming in a later phase" aria-label="Coming soon" /> : null}
         </NavLink>
       ))}
     </nav>
   );
 }
-const linkCls = (active: boolean) =>
+const linkCls = (active: boolean, collapsed = false) =>
   clsx(
-    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+    'flex items-center rounded-xl py-2.5 text-sm font-medium transition-colors',
+    collapsed ? 'justify-center px-0' : 'gap-3 px-3',
     active ? 'bg-white text-burgundy-900 shadow-sm' : 'text-burgundy-100/85 hover:bg-white/10 hover:text-white',
   );
 
-function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarBody({ onNavigate, collapsed = false, onToggle }: { onNavigate?: () => void; collapsed?: boolean; onToggle?: () => void }) {
   const { me } = useAuth();
   return (
     <div className="flex h-full flex-col bg-burgundy-950">
-      <div className="flex h-16 shrink-0 items-center px-5">
+      <div className={clsx('flex h-16 shrink-0 items-center', collapsed ? 'justify-center' : 'px-5')}>
         <Link to={me?.user.role === 'platform_admin' ? '/admin' : '/app'} onClick={onNavigate} aria-label="Dashboard home">
-          <Logo tone="light" size={32} />
+          {collapsed ? <LogoMark size={34} /> : <Logo tone="light" size={32} />}
         </Link>
       </div>
-      <SidebarLinks onNavigate={onNavigate} />
-      {me?.tenant ? (
-        <div className="m-3 rounded-xl border border-white/10 bg-white/5 p-3.5">
+      <SidebarLinks onNavigate={onNavigate} collapsed={collapsed} />
+      {me?.tenant && !collapsed ? (
+        <div className="mx-3 mt-3 rounded-xl border border-white/10 bg-white/5 p-3.5">
           <p className="text-[11px] font-medium tracking-wide text-burgundy-300 uppercase">Workspace</p>
           <p className="mt-0.5 truncate text-sm font-semibold text-white">{me.tenant.name}</p>
         </div>
+      ) : null}
+      {onToggle ? (
+        <button
+          onClick={onToggle}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className={clsx('m-3 flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium text-burgundy-100/70 hover:bg-white/10 hover:text-white', collapsed ? 'justify-center' : 'px-3')}
+        >
+          {collapsed ? <PanelLeftOpen className="size-[18px]" strokeWidth={1.8} /> : <PanelLeftClose className="size-[18px]" strokeWidth={1.8} />}
+          {collapsed ? null : 'Collapse'}
+        </button>
       ) : null}
     </div>
   );
@@ -131,6 +143,22 @@ function UserMenu() {
 
 export function AppShell({ banner }: { banner?: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('ma_sidebar_collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem('ma_sidebar_collapsed', c ? '0' : '1');
+      } catch {
+        /* storage unavailable: the preference just won't persist */
+      }
+      return !c;
+    });
   const { pathname } = useLocation();
   const { me } = useAuth();
   const current = NAV.find((n) => (n.end ? pathname === n.to : pathname.startsWith(n.to)));
@@ -140,8 +168,8 @@ export function AppShell({ banner }: { banner?: ReactNode }) {
 
   return (
     <div className="min-h-dvh bg-mist-50">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 lg:block">
-        <SidebarBody />
+      <aside className={clsx('fixed inset-y-0 left-0 z-30 hidden transition-[width] duration-200 lg:block', collapsed ? 'w-[76px]' : 'w-64')}>
+        <SidebarBody collapsed={collapsed} onToggle={toggleCollapsed} />
       </aside>
 
       <AnimatePresence>
@@ -158,7 +186,7 @@ export function AppShell({ banner }: { banner?: ReactNode }) {
         ) : null}
       </AnimatePresence>
 
-      <div className="lg:pl-64">
+      <div className={clsx('transition-[padding] duration-200', collapsed ? 'lg:pl-[76px]' : 'lg:pl-64')}>
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-mist-200 bg-white/85 px-4 backdrop-blur-xl sm:px-6">
           <button onClick={() => setDrawer(true)} className="rounded-lg p-2 text-mist-700 hover:bg-mist-100 lg:hidden" aria-label="Open menu">
             <Menu className="size-5" />
