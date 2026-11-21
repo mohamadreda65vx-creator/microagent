@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/* ───────────────────────────────────────────────────────────
+   MicroAgent design tokens
+   Palette: White · Burgundy · Dark Burgundy · Light Gray
+   ─────────────────────────────────────────────────────────── */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+
+  /* Burgundy scale: 600–700 = Burgundy, 900–950 = Dark Burgundy */
+  --color-burgundy-50: #fbf4f6;
+  --color-burgundy-100: #f6e4e9;
+  --color-burgundy-200: #edc8d3;
+  --color-burgundy-300: #de9fb3;
+  --color-burgundy-400: #c96f8d;
+  --color-burgundy-500: #ae4768;
+  --color-burgundy-600: #912f50;
+  --color-burgundy-700: #7a2342;
+  --color-burgundy-800: #5c1932;
+  --color-burgundy-900: #3f1122;
+  --color-burgundy-950: #2a0a16;
+
+  /* Light gray scale (slightly warm so it sits well with burgundy) */
+  --color-mist-50: #faf9f9;
+  --color-mist-100: #f4f2f3;
+  --color-mist-200: #e9e6e8;
+  --color-mist-300: #d7d3d6;
+  --color-mist-400: #aaa4a9;
+  --color-mist-500: #7d767b;
+  --color-mist-600: #5d575b;
+  --color-mist-700: #443f42;
+  --color-mist-800: #2c282a;
+  --color-mist-900: #1d1a1c;
+
+  --shadow-soft: 0 1px 2px rgb(42 10 22 / 0.04), 0 8px 24px -12px rgb(42 10 22 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(42 10 22 / 0.05), 0 24px 48px -20px rgb(42 10 22 / 0.28);
+
+  --animate-blink: blink 5s infinite;
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+  --animate-marquee: marquee 38s linear infinite;
+  --animate-orbit: orbit 46s linear infinite;
+  --animate-orbit-reverse: orbit 46s linear infinite reverse;
+
+  @keyframes blink {
+    0%, 92%, 100% { transform: scaleY(1); }
+    95% { transform: scaleY(0.08); }
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes orbit {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-white font-sans text-mist-900 antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+  ::selection {
+    background: var(--color-burgundy-200);
+    color: var(--color-burgundy-950);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-burgundy-500);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  dialog::backdrop {
+    background: rgb(42 10 22 / 0.5);
+    backdrop-filter: blur(3px);
+  }
+}
+
+@layer utilities {
+  .eye { transform-box: fill-box; transform-origin: center; }
+  .skeleton {
+    background: linear-gradient(90deg, var(--color-mist-100) 25%, var(--color-mist-200) 37%, var(--color-mist-100) 63%);
+    background-size: 400% 100%;
+    animation: var(--animate-shimmer);
+  }
+  .text-balance { text-wrap: balance; }
+  .grid-fade {
+    background-image:
+      linear-gradient(to right, rgb(122 35 66 / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(122 35 66 / 0.06) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 75%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-blink, .animate-marquee, .animate-orbit, .animate-orbit-reverse, .skeleton {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,65 @@
+/**
+ * RBAC — single source of truth.
+ *
+ * Roles
+ *   platform_admin  MicroAgent staff. Not tied to a tenant. Only reaches /platform/* routes.
+ *   owner           The Business Owner. One per tenant.
+ *   admin           Manages the workspace and team (except the owner and other admins).
+ *   manager         Creates and edits AI Employees. Read-only on team/settings.
+ *   viewer          Read-only.
+ *
+ * The database additionally enforces the hard boundary (tenant isolation) through RLS;
+ * these permissions decide what a user may do INSIDE their own tenant.
+ */
+export const ROLES = ['platform_admin', 'owner', 'admin', 'manager', 'viewer'] as const;
+export type Role = (typeof ROLES)[number];
+export type TenantRole = Exclude<Role, 'platform_admin'>;
+
+export const PERMISSIONS = [
+  'overview:read',
+  'ai_employees:read',
+  'ai_employees:write',
+  'team:read',
+  'team:manage',
+  'settings:read',
+  'settings:manage',
+  'platform:manage',
+] as const;
+export type Permission = (typeof PERMISSIONS)[number];
+
+const tenantAll: Permission[] = [
+  'overview:read',
+  'ai_employees:read',
+  'ai_employees:write',
+  'team:read',
+  'team:manage',
+  'settings:read',
+  'settings:manage',
+];
+
+export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
+  platform_admin: ['platform:manage'],
+  owner: tenantAll,
+  admin: tenantAll,
+  manager: ['overview:read', 'ai_employees:read', 'ai_employees:write', 'team:read', 'settings:read'],
+  viewer: ['overview:read', 'ai_employees:read', 'team:read', 'settings:read'],
+};
+
+export function can(role: Role, permission: Permission): boolean {
+  return ROLE_PERMISSIONS[role].includes(permission);
+}
+
+/** Which roles an actor may assign / invite. */
+export function assignableRoles(actor: Role): Array<'admin' | 'manager' | 'viewer'> {
+  if (actor === 'owner') return ['admin', 'manager', 'viewer'];
+  if (actor === 'admin') return ['manager', 'viewer'];
+  return [];
+}
+
+/** Whether the actor may modify (change role / disable) a user who currently has `target` role. */
+export function canManageRole(actor: Role, target: Role): boolean {
+  if (target === 'owner' || target === 'platform_admin') return false;
+  if (actor === 'owner') return true;
+  if (actor === 'admin') return target === 'manager' || target === 'viewer';
+  return false;
+}
