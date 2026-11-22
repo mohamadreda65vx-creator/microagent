@@ -5,6 +5,7 @@ import { buildApp } from '../src/app.js';
 import { loadConfig, withDatabase, type Config } from '../src/config/env.js';
 import { runMigrations } from '../src/db/migrate.js';
 import { hashPassword } from '../src/shared/security.js';
+import { FakeOpenRouter } from './fake-openrouter.js';
 
 export const PASSWORD = 'Correct-horse-battery-1';
 
@@ -13,10 +14,12 @@ export interface TestEnv {
   config: Config;
   /** Owner connection: ONLY for test setup/inspection. Bypasses RLS like a DBA would. */
   owner: pg.Pool;
+  /** Local stand-in for OpenRouter (tests only). */
+  fake: FakeOpenRouter;
   close(): Promise<void>;
 }
 
-export function testConfig(): Config {
+export function testConfig(fakeUrl = 'http://127.0.0.1:9', withKey = true): Config {
   const base = loadConfig();
   const db = base.testDatabaseName;
   return {
@@ -24,11 +27,15 @@ export function testConfig(): Config {
     nodeEnv: 'test',
     appUrl: 'http://localhost:5173',
     db: { owner: withDatabase(base.db.owner, db), app: withDatabase(base.db.app, db), platform: withDatabase(base.db.platform, db) },
+    ai: { ...base.ai, apiKey: withKey ? 'test-key-SECRET' : undefined, baseUrl: fakeUrl, retryBaseMs: 1, maxRetries: 3, timeoutMs: 1500, models: [], monthlyTokenLimit: 1_000_000 },
+    allowPrivateFetch: true,
   };
 }
 
-export async function createTestEnv(opts: { rateLimit?: boolean } = {}): Promise<TestEnv> {
-  const config = testConfig();
+export async function createTestEnv(opts: { rateLimit?: boolean; noAi?: boolean } = {}): Promise<TestEnv> {
+  const fake = new FakeOpenRouter();
+  await fake.start();
+  const config = testConfig(fake.url, !opts.noAi);
   await runMigrations(config.db.owner, () => {});
   const owner = new pg.Pool({ connectionString: config.db.owner, max: 2 });
   await owner.query('TRUNCATE tenants, users, email_outbox, audit_logs RESTART IDENTITY CASCADE');
@@ -38,9 +45,11 @@ export async function createTestEnv(opts: { rateLimit?: boolean } = {}): Promise
     app,
     config,
     owner,
+    fake,
     async close() {
       await app.close();
       await owner.end();
+      await fake.stop();
     },
   };
 }
@@ -57,7 +66,7 @@ export class Client {
   cookie: string | undefined;
   constructor(private app: FastifyInstance) {}
 
-  async request<T = any>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, body?: unknown, headers: Record<string, string> = {}): Promise<Res<T>> {
+  async request<T = any>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, body?: unknown, headers: Record<string, string> = {}): Promise<Res<T>> {
     const res = await this.app.inject({
       method,
       url: `/api/v1${url}`,
@@ -71,6 +80,7 @@ export class Client {
   get = <T = any>(url: string) => this.request<T>('GET', url);
   post = <T = any>(url: string, body?: unknown, headers?: Record<string, string>) => this.request<T>('POST', url, body ?? {}, headers);
   patch = <T = any>(url: string, body: unknown) => this.request<T>('PATCH', url, body);
+  put = <T = any>(url: string, body: unknown) => this.request<T>('PUT', url, body);
   del = <T = any>(url: string) => this.request<T>('DELETE', url);
 }
 
@@ -133,4 +143,17 @@ export function tokenFrom(emailBody: string): string {
   const m = emailBody.match(/token=([A-Za-z0-9_-]+)/);
   if (!m) throw new Error('no token in email');
   return m[1]!;
+}
+
+/** Invite a teammate through the real endpoints and return a logged-in client for them. */
+export async function inviteMember(env: TestEnv, owner: Tenant, role: 'admin' | 'manager' | 'viewer'): Promise<Client> {
+  const email = uniqueEmail(role);
+  const inv = await owner.client.post('/team/invitations', { email, role });
+  if (inv.status !== 201) throw new Error(`invite failed: ${inv.status} ${JSON.stringify(inv.body)}`);
+  const token = tokenFrom(await lastEmailTo(env, email));
+  const c = new Client(env.app);
+  const acc = await c.post('/auth/accept-invitation', { token, fullName: `${role} user`, password: PASSWORD });
+  if (![200, 201].includes(acc.status)) throw new Error(`accept failed: ${acc.status} ${JSON.stringify(acc.body)}`);
+  if (!c.cookie) await c.post('/auth/login', { email, password: PASSWORD });
+  return c;
 }

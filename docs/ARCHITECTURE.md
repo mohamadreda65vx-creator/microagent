@@ -72,6 +72,9 @@ Roles: `platform_admin`, `owner`, `admin`, `manager`, `viewer`. Single source of
 |---|---|---|---|---|
 | overview:read, ai_employees:read, team:read, settings:read | ✅ | ✅ | ✅ | ✅ |
 | ai_employees:write | ✅ | ✅ | ✅ | — |
+| knowledge:read, rules:read, approvals:read | ✅ | ✅ | ✅ | ✅ |
+| knowledge:write, rules:write, simulation:run, approvals:decide | ✅ | ✅ | ✅ | — |
+| ai_permissions:manage (change what an employee may DO, activate, roll back), audit:read | ✅ | ✅ | — | — |
 | team:manage, settings:manage | ✅ | ✅ | — | — |
 
 Rules: exactly one owner per tenant (unique index); nobody can change their own role/status; the owner cannot be modified; admins can only manage managers/viewers; platform admins have no access to tenant business routes.
@@ -103,9 +106,96 @@ An `onResponse` hook increments `usage_daily(tenant, day, 'api_requests')`. Late
 
 React SPA, route groups `/app/*` (business) and `/admin` (platform), each behind `RequireAuth` (server session) and `RequirePermission`. Brand tokens (White, Burgundy, Dark Burgundy, Light Gray) are defined once in `apps/web/src/index.css`. The mascot and logo are original SVGs. Animations respect `prefers-reduced-motion`.
 
-## 10. Decisions to keep for later parts
+## 10. Decisions to keep for later parts (Part 1)
 
 - Keep adding tenant tables with RLS in the same migration; extend the guard test.
 - Background jobs (AI calls, channel webhooks) will need either a worker process using the same DB roles or a queue table; decide in Part 2 based on Hostinger plan.
 - Channel webhooks are public, tenant-less entry points: resolve tenant from a signed channel id, then use `withTenant`.
 - Real email (SMTP) must be configured before onboarding real customers.
+
+
+---
+
+# Part 2 — AI Employees & Intelligence
+
+## 11. Principle: the backend decides, the model only proposes
+
+The model never executes anything and is never trusted to follow instructions. For every customer message:
+
+1. **Hand-off rules run first, in code** (angry customer, customer asks for a person). If one fires, the model is **not called**.
+2. The model returns `{reply, actions[]}`. Every proposed action goes through the **Policy Engine** (`agent/policy.ts`, pure and deterministic).
+3. The reply goes through **output guards** (`agent/guards.ts`). A blocked reply is replaced by a safe, localized one (English / MSA / Egyptian).
+4. Every proposed action is stored in `agent_actions` with the decision and reasons; denials and approvals are audited.
+
+If the AI provider is down, not configured or over budget, the employee does **not** improvise: safe reply + hand-off to a human.
+
+## 12. Policy Engine
+
+Order: validate shape (zod per action) → task gating → employee permission (`deny | allow | require_approval`, with `maxPercent` / `maxAmount`) → company rules → limits → required fields.
+Outcome precedence: `denied > invalid > pending_approval > allowed`.
+Actions: collect_lead, give_discount, create_order, create_booking, schedule_followup, check_inventory, issue_refund, handoff_to_human (always allowed, cannot be disabled).
+Defaults are conservative: discounts and refunds **denied**, orders and bookings **need approval**. `check_inventory` is denied until an inventory source exists.
+Approvals: `agent_actions.approval_status` can be decided **once** (trigger in the database); deciding needs `approvals:decide`.
+
+## 13. Output guards (heuristics, with known limits)
+
+- **Prices:** every price-looking number in a reply (EN/AR, Arabic digits, currency words/symbols) must be a confirmed price, a number the customer said, or a total derived from facts matched in this answer (quantity × price where the customer gave the quantity, or a sum of two matched prices).
+- **Discounts:** a percentage near discount words must be within the employee's limit or appear in a confirmed offer.
+- **Stock:** any availability / stock statement is blocked while no inventory source is connected.
+- **Language:** a mismatch with the required language is reported as a warning.
+- Limits: text heuristics can miss unusual phrasings (e.g. prices written in words) and can over-block rare legitimate totals. They sit **on top of** the Policy Engine, not instead of it.
+
+## 14. Teach & Correct
+
+An instruction is previewed, then saved as one or more **structured rules** (`teach_rules.effect`, zod-validated), classified as **Knowledge**, **Behavior** or **Workflow** update. Not one big prompt: the prompt is assembled per message (profile + rules by category + the few confirmed facts that match + permission table).
+- **Enforced** effects: prohibit_action, require_approval, require_field (e.g. phone before order), handoff_trigger, require_inventory_check, dialect, language, knowledge_fact.
+- **Advisory** effects (tone, free instruction) only steer wording. The UI labels them “Guidance only: not enforced”.
+- Rules can only **restrict**. An instruction that grants power (“you can give 50% discounts”) is refused and must be done in the employee's Permissions by an owner/admin.
+- Classification = deterministic patterns (EN + Arabic) → optional AI classification validated against the same schema → advisory fallback.
+- Every rule is versioned (`teach_rule_versions`); disable / edit / roll back (a rollback is a new version). A `knowledge_fact` rule owns a confirmed knowledge item that is retired when the rule is disabled.
+- Changing rules does not take a live employee offline (they only restrict), but it invalidates its “tested” state (flagged in the UI).
+
+## 15. Business Discovery
+
+Sources: website (SSRF-safe crawl of up to 5–10 same-site pages), social posts (**pasted / JSON**, default latest **30**, adjustable 1–200), PDF, Word, Excel/CSV, product lists, business info typed by the owner.
+- Product lists / tables are read **deterministically** (no AI). Empty or unparseable prices stay empty.
+- Text sources use the AI to extract facts, but each fact must carry an **exact quote** that exists in the source; a price is kept only if the number is in the quote. Otherwise the fact/price is dropped (counted in `stats`).
+- Every fact stores source, source reference, date of the information, evidence, origin and status (`unconfirmed → confirmed | rejected | outdated`). Only **confirmed** facts reach an employee.
+- Smart questions (`discovery/questions.ts`) are deterministic: missing price, price conflict, outdated (>90 days; offers >30), missing basics. `subject_key` is unique per company, so a question is never asked twice; solved ones close automatically; the UI shows at most 5 at a time.
+- Fetcher: http/https only, DNS answer checked at connect time (private/loopback/link-local/metadata addresses refused), redirects re-checked, size and time capped.
+
+## 16. AI layer (OpenRouter)
+
+`LlmProvider` interface → `OpenRouterProvider` → `AiService` (the only door to the model). Key only in server env (`OPENROUTER_API_KEY`); never sent to the browser or logged.
+Timeout, retry with exponential backoff + jitter (408/409/425/429/5xx/network/timeout/200-with-inner-error; honours Retry-After up to 8 s; never retries 401/402/400), model allow-list, per-company **monthly token budget** checked before each call (platform admin can override per company; 0 = AI off), a usage row for every call (tokens, provider-reported cost — `NULL` if the provider did not report one, never guessed — latency, attempts, error code). Context: system + newest turns within a token budget, messages clipped.
+
+## 17. Versions, activation gate, simulation
+
+- Every profile/permission change creates an `ai_employee_versions` snapshot; rollback applies an old snapshot as a **new** version (needs `ai_permissions:manage`).
+- **Activation gate:** an employee can go live only with ≥1 task **and** a passing simulation suite for its **current fingerprint** (profile + permissions + active rules + visible confirmed knowledge). Any later change invalidates it; editing a live employee pauses it until retested.
+- Suite scenarios are built from the company's real data (a real product and price, unknown product, discount, stock, refund, order without phone, human request, angry customer, language) with **deterministic checks**; the model is the thing under test, never the judge. At least 4 scenarios must run. The suite needs a configured AI provider; without it, it returns `ai_not_configured` and nothing is marked tested.
+- Playground chat shows the trace: model answer vs. final answer, decisions, guard findings, facts used, tokens/cost.
+
+## 18. Tenant isolation in Part 2
+
+- All new tables have RLS (`tenant_id = app_current_tenant()`), enforced by the guard test.
+- **Composite FKs `(tenant_id, id)`**: a rule, version, action, simulation or source link can never point at another company's employee/source even if application code is wrong (tested directly in SQL).
+- Knowledge retrieval, rules and permissions are all loaded inside `withTenant`; tests assert that company B's prompt never contains company A's facts, rules, dialect or employee names.
+
+## 19. New API (under `/api/v1`)
+
+| Area | Endpoints |
+|---|---|
+| AI catalog | `GET /ai/catalog` `/ai/models` `/ai/usage` |
+| Employees | `POST /ai-employees/:id/status` · `PUT /ai-employees/:id/sources` · `GET /ai-employees/:id/versions[/:v]` · `POST /ai-employees/:id/rollback` |
+| Simulation | `POST /ai-employees/:id/simulate` `/simulate/suite` · `GET /ai-employees/:id/simulations[/:runId]` |
+| Knowledge | `GET/POST /knowledge/sources` · `PATCH/DELETE /knowledge/sources/:id` · `POST …/:id/content` `/upload` `/analyze` · `GET/POST /knowledge/items` · `PATCH/DELETE /knowledge/items/:id` · `POST /knowledge/items/bulk-status` · `GET /knowledge/summary` `/knowledge/questions` · `POST /knowledge/questions/refresh` `/knowledge/questions/:id/answer` |
+| Teach | `POST /teach/preview` `/teach/rules` · `GET /teach/rules` · `PATCH /teach/rules/:id` · `GET …/versions` · `POST …/rollback` |
+| Governance | `GET /approvals` `/agent-actions` `/audit-logs` · `POST /approvals/:id/decision` |
+| Platform | `PATCH /platform/tenants/:id/ai-limit` (tenant list now includes AI tokens/cost/limit) |
+
+## 20. Decisions to keep for later parts
+
+- Channels (Part 3) will call the same `runTurn(mode: 'live')`; live `agent_actions` already flow into the Approvals queue (the UI separates live from Playground tests). Executing an approved/allowed action against real systems (orders, bookings, CRM) is **not** implemented: Part 2 records and decides, it does not execute.
+- Inventory: introduce an inventory connector and flip `inventoryConnected` in the policy context; until then stock claims are blocked by design.
+- Long analyses currently run inside the request (≤12 AI calls). A job queue is the next step if sources get large.

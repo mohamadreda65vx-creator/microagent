@@ -33,6 +33,8 @@ Copy `.env.example` to `.env` and set:
 - `TRUST_PROXY=true` (the app sits behind nginx, so rate limiting sees real client IPs)
 - the three `DATABASE_URL_*` values pointing at `microagent_prod`
 - `SMTP_*` (password reset and invitations are not delivered without it)
+- `OPENROUTER_API_KEY` (server only; without it AI features report "AI not configured" and employees cannot be activated). Optional: `OPENROUTER_DEFAULT_MODEL`, `OPENROUTER_MODELS`, `AI_MONTHLY_TOKEN_LIMIT`, `AI_TIMEOUT_MS`, `AI_MAX_RETRIES`. **Not tested against the real OpenRouter yet**: after setting the key, run one Playground test and one simulation suite before going live.
+- The server must be able to reach `openrouter.ai` and the customer websites it crawls (outbound HTTPS).
 
 `chmod 600 .env`
 

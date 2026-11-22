@@ -1,52 +1,38 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Avatar, statusTone as tone } from './employee/shared';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import type { AiEmployee, EmployeeStatus } from '../../lib/types';
-import { Badge, Button, Card, EmptyState, ErrorState, FormError, Modal, SelectField, Skeleton, TextAreaField, TextField } from '../../components/ui/primitives';
+import type { AiEmployee } from '../../lib/types';
+import { Badge, Button, Card, EmptyState, ErrorState, FormError, Modal, Skeleton, TextAreaField, TextField } from '../../components/ui/primitives';
 import { useToast } from '../../components/ui/Toast';
 
-const statusTone = { draft: 'gray', active: 'green', paused: 'amber' } as const;
 
-function EmployeeForm({ initial, onDone, onCancel }: { initial?: AiEmployee; onDone: () => void; onCancel: () => void }) {
+function NewEmployeeForm({ onCancel }: { onCancel: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
-  const [f, setF] = useState({
-    name: initial?.name ?? '',
-    jobTitle: initial?.jobTitle ?? '',
-    description: initial?.description ?? '',
-    status: (initial?.status ?? 'draft') as EmployeeStatus,
-  });
+  const nav = useNavigate();
+  const [f, setF] = useState({ name: '', jobTitle: '', description: '' });
   const m = useMutation({
-    mutationFn: () =>
-      initial ? api<AiEmployee>(`/ai-employees/${initial.id}`, { method: 'PATCH', body: { ...f, name: f.name.trim() } }) : api<AiEmployee>('/ai-employees', { body: { ...f, name: f.name.trim() } }),
-    onSuccess: async () => {
+    mutationFn: () => api<AiEmployee>('/ai-employees', { body: { ...f, name: f.name.trim() } }),
+    onSuccess: async (e) => {
       await Promise.all([qc.invalidateQueries({ queryKey: ['ai-employees'] }), qc.invalidateQueries({ queryKey: ['overview'] })]);
-      toast.success(initial ? 'AI employee updated' : 'AI employee created');
-      onDone();
+      toast.success('Created. Next: choose its tasks and test it.');
+      nav(`/app/ai-employees/${e.id}`);
     },
   });
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        m.mutate();
-      }}
-      className="space-y-4"
-    >
+    <form onSubmit={(e) => { e.preventDefault(); m.mutate(); }} className="space-y-4">
       <FormError error={m.error} />
       <TextField label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} maxLength={80} required autoFocus placeholder="e.g. Layla" />
-      <TextField label="Job title" value={f.jobTitle} onChange={(e) => setF({ ...f, jobTitle: e.target.value })} maxLength={120} placeholder="e.g. Customer support agent" />
+      <TextField label="Role" value={f.jobTitle} onChange={(e) => setF({ ...f, jobTitle: e.target.value })} maxLength={120} placeholder="e.g. Customer support agent" />
       <TextAreaField label="What should this employee do?" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={1000} placeholder="Describe the role in a few sentences." />
-      <SelectField label="Status" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value as EmployeeStatus })}>
-        <option value="draft">Draft</option>
-        <option value="active">Active</option>
-        <option value="paused">Paused</option>
-      </SelectField>
+      <p className="text-[13px] text-mist-500">It starts as a draft. You will set its tasks and permissions, then test it before it can go live.</p>
       <div className="flex justify-end gap-2 pt-1">
         <Button variant="secondary" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" loading={m.isPending} disabled={!f.name.trim()}>{initial ? 'Save changes' : 'Create employee'}</Button>
+        <Button type="submit" loading={m.isPending} disabled={!f.name.trim()}>Create and set up</Button>
       </div>
     </form>
   );
@@ -57,7 +43,8 @@ export default function AiEmployees() {
   const canWrite = can('ai_employees:write');
   const qc = useQueryClient();
   const toast = useToast();
-  const [editing, setEditing] = useState<AiEmployee | 'new' | null>(null);
+  const [creating, setCreating] = useState(false);
+  const nav = useNavigate();
   const [deleting, setDeleting] = useState<AiEmployee | null>(null);
 
   const q = useQuery({ queryKey: ['ai-employees'], queryFn: () => api<{ items: AiEmployee[] }>('/ai-employees') });
@@ -71,7 +58,7 @@ export default function AiEmployees() {
     onError: (e) => toast.error(e.message),
   });
 
-  const newBtn = canWrite ? <Button icon={Plus} onClick={() => setEditing('new')}>New AI employee</Button> : null;
+  const newBtn = canWrite ? <Button icon={Plus} onClick={() => setCreating(true)}>New AI employee</Button> : null;
 
   return (
     <div className="space-y-6">
@@ -98,17 +85,18 @@ export default function AiEmployees() {
           {q.data.items.map((e) => (
             <Card key={e.id} className="flex flex-col p-5">
               <div className="flex items-start gap-3">
-                <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-burgundy-700 font-display text-lg font-semibold text-white">{e.name[0]?.toUpperCase()}</div>
+                <Avatar avatar={e.avatar} name={e.name} />
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate font-display text-base font-semibold text-mist-900">{e.name}</h3>
                   <p className="truncate text-[13px] text-mist-500">{e.jobTitle || 'No job title'}</p>
                 </div>
-                <Badge tone={statusTone[e.status]}>{e.status}</Badge>
+                <Badge tone={tone[e.status]}>{e.status}</Badge>
               </div>
               <p className="mt-4 line-clamp-3 flex-1 text-sm text-mist-600">{e.description || 'No description yet.'}</p>
+              <p className="mt-2 text-[12px] text-mist-500">{e.tasks.length ? `${e.tasks.length} task${e.tasks.length > 1 ? 's' : ''}` : 'No tasks yet'}{e.testedAt ? ' · tested' : ''}</p>
               {canWrite ? (
                 <div className="mt-4 flex gap-2 border-t border-mist-100 pt-4">
-                  <Button size="sm" variant="secondary" icon={Pencil} onClick={() => setEditing(e)}>Edit</Button>
+                  <Button size="sm" variant="secondary" icon={Pencil} onClick={() => nav(`/app/ai-employees/${e.id}`)}>Open</Button>
                   <Button size="sm" variant="danger" icon={Trash2} onClick={() => setDeleting(e)}>Delete</Button>
                 </div>
               ) : null}
@@ -117,8 +105,8 @@ export default function AiEmployees() {
         </div>
       )}
 
-      <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing === 'new' ? 'New AI employee' : 'Edit AI employee'}>
-        {editing !== null ? <EmployeeForm initial={editing === 'new' ? undefined : editing} onDone={() => setEditing(null)} onCancel={() => setEditing(null)} /> : null}
+      <Modal open={creating} onClose={() => setCreating(false)} title="New AI employee">
+        {creating ? <NewEmployeeForm onCancel={() => setCreating(false)} /> : null}
       </Modal>
       <Modal open={deleting !== null} onClose={() => setDeleting(null)} title="Delete AI employee?" description={deleting ? `“${deleting.name}” will be permanently removed. This can’t be undone.` : undefined}>
         <div className="flex justify-end gap-2">

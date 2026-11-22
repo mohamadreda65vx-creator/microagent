@@ -6,7 +6,11 @@ import Landing from './pages/Landing';
 import { AcceptInvite, ForgotPassword, Login, ResetPassword, Signup } from './pages/auth/AuthPages';
 import Companies from './pages/admin/Companies';
 import AiEmployees from './pages/app/AiEmployees';
+import EmployeeEditor from './pages/app/EmployeeEditor';
 import Conversations from './pages/app/Conversations';
+import Activity from './pages/app/Activity';
+import Knowledge from './pages/app/Knowledge';
+import Teach from './pages/app/Teach';
 import Overview from './pages/app/Overview';
 import Planned from './pages/app/Planned';
 import Settings from './pages/app/Settings';
@@ -40,8 +44,12 @@ export default function App() {
         <Route path="/app" element={<AppShell />}>
           <Route index element={<Overview />} />
           <Route path="ai-employees" element={<RequirePermission permission="ai_employees:read"><AiEmployees /></RequirePermission>} />
+ <Route path="ai-employees/:id" element={<RequirePermission permission="ai_employees:read"><EmployeeEditor /></RequirePermission>} />
           <Route path="team" element={<RequirePermission permission="team:read"><Team /></RequirePermission>} />
           <Route path="settings" element={<RequirePermission permission="settings:read"><Settings /></RequirePermission>} />
+          <Route path="knowledge" element={<RequirePermission permission="knowledge:read"><Knowledge /></RequirePermission>} />
+          <Route path="teach" element={<RequirePermission permission="rules:read"><Teach /></RequirePermission>} />
+          <Route path="activity" element={<RequirePermission permission="approvals:read"><Activity /></RequirePermission>} />
           <Route path="conversations" element={<Conversations />} />
           <Route path="workflows" element={<Workflows />} />
           {NAV.filter((n) => n.planned && !['/app/conversations', '/app/workflows'].includes(n.to)).map((n) => (

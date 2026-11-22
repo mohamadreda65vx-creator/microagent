@@ -9,6 +9,10 @@ import { ZodError } from 'zod';
 import type { Config } from './config/env.js';
 import { createPools, type Pools } from './db/pool.js';
 import { aiEmployeeRoutes } from './modules/ai-employees/routes.js';
+import { simulationRoutes } from './modules/simulation/routes.js';
+import { teachRoutes } from './modules/teach/routes.js';
+import { knowledgeRoutes } from './modules/knowledge/routes.js';
+import { governanceRoutes } from './modules/governance/routes.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { overviewRoutes } from './modules/overview/routes.js';
 import { platformRoutes } from './modules/platform/routes.js';
@@ -18,11 +22,15 @@ import { registerAuth } from './plugins/auth.js';
 import { registerUsageMetering } from './plugins/usage.js';
 import { AppError, forbidden } from './shared/errors.js';
 import { createMailer } from './shared/mailer.js';
+import { AiService } from './ai/service.js';
+import type { LlmProvider } from './ai/types.js';
 
 export interface BuildOptions {
   config: Config;
   pools?: Pools;
   logger?: boolean;
+  /** Test hook: replace the AI provider (default: OpenRouter when OPENROUTER_API_KEY is set). */
+  aiProvider?: LlmProvider | null;
   /** Per-IP throttling on auth endpoints. Disabled in most tests. */
   rateLimit?: boolean;
 }
@@ -39,6 +47,7 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
   app.decorate('pools', pools);
   app.decorate('config', config);
   app.decorate('mailer', createMailer(config, pools, app.log));
+  app.decorate('ai', new AiService(config, pools, app.log, opts.aiProvider));
   if (!opts.pools) app.addHook('onClose', async () => pools.close());
 
   await app.register(helmet, {
@@ -110,6 +119,10 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
       await api.register(tenantRoutes);
       await api.register(teamRoutes);
       await api.register(aiEmployeeRoutes);
+      await api.register(governanceRoutes);
+      await api.register(knowledgeRoutes);
+      await api.register(teachRoutes);
+      await api.register(simulationRoutes);
       await api.register(overviewRoutes);
       await api.register(platformRoutes);
     },

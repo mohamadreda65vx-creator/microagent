@@ -50,8 +50,17 @@ Production-style (single process): `npm run build && npm start` then open http:/
 npm test
 ```
 
-Runs the API integration tests against the `microagent_test` database (35 tests: authentication, RBAC,
-tenant isolation through the API, and tenant isolation directly in PostgreSQL).
+Runs the API integration tests against the `microagent_test` database (115 tests: authentication, RBAC,
+tenant isolation through the API and directly in PostgreSQL, the AI provider layer, the permissions engine
+and guards, business discovery, Teach & Correct, simulation and the activation gate). Tests use a local
+stand-in for OpenRouter (`apps/api/test/fake-openrouter.ts`); they never call the real service.
+
+## AI (OpenRouter)
+
+Set `OPENROUTER_API_KEY` in the server `.env` (never in the web app). Without it the platform runs and
+AI features say “AI not configured” instead of guessing. Other variables: `OPENROUTER_DEFAULT_MODEL`,
+`OPENROUTER_MODELS` (optional allow-list), `AI_MONTHLY_TOKEN_LIMIT` (per company, overridable by the
+platform admin), `AI_TIMEOUT_MS`, `AI_MAX_RETRIES`. See `.env.example`.
 
 ## Where to look
 

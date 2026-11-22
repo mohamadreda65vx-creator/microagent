@@ -14,7 +14,10 @@ const TENANT_ROW = `
   (SELECT count(*) FROM users u WHERE u.tenant_id = t.id) AS "usersCount",
   (SELECT count(*) FROM ai_employees a WHERE a.tenant_id = t.id) AS "aiEmployeesCount",
   COALESCE((SELECT sum(d.quantity) FROM usage_daily d WHERE d.tenant_id = t.id AND d.metric = 'api_requests' AND d.day >= ${MONTH_START}), 0)::bigint AS "apiRequestsMonth",
-  (SELECT max(u.last_login_at) FROM users u WHERE u.tenant_id = t.id) AS "lastLoginAt"`;
+  (SELECT max(u.last_login_at) FROM users u WHERE u.tenant_id = t.id) AS "lastLoginAt",
+  t.ai_monthly_token_limit AS "aiMonthlyTokenLimit",
+  COALESCE((SELECT sum(a.total_tokens) FROM ai_usage a WHERE a.tenant_id = t.id AND a.created_at >= date_trunc('month', now() AT TIME ZONE 'utc') AT TIME ZONE 'utc'), 0)::bigint AS "aiTokensMonth",
+  (SELECT sum(a.cost_usd) FROM ai_usage a WHERE a.tenant_id = t.id AND a.created_at >= date_trunc('month', now() AT TIME ZONE 'utc') AT TIME ZONE 'utc')::float8 AS "aiCostMonthUsd"`;
 
 export async function platformRoutes(app: FastifyInstance): Promise<void> {
   const pre = [app.authenticate, app.requirePlatformAdmin];
@@ -57,6 +60,27 @@ export async function platformRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.uuid() }).parse(req.params);
     const { rows } = await db().query(`SELECT ${TENANT_ROW} FROM tenants t WHERE t.id = $1`, [id]);
     if (!rows[0]) throw notFound('Company not found');
+    return rows[0];
+  });
+
+  /** Per-company monthly AI token budget. null = use the platform default (AI_MONTHLY_TOKEN_LIMIT); 0 = AI disabled for this company. */
+  app.patch('/platform/tenants/:id/ai-limit', { preHandler: pre }, async (req) => {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z.object({ aiMonthlyTokenLimit: z.number().int().min(0).max(1_000_000_000).nullable() }).parse(req.body);
+    const client = await db().connect();
+    try {
+      await client.query('BEGIN');
+      const res = await client.query('UPDATE tenants SET ai_monthly_token_limit = $1 WHERE id = $2 RETURNING id', [body.aiMonthlyTokenLimit, id]);
+      if (res.rowCount === 0) throw notFound('Company not found');
+      await client.query(`INSERT INTO audit_logs (tenant_id, actor_user_id, action, entity_type, entity_id, meta) VALUES ($1, $2, 'tenant.ai_limit_changed', 'tenant', $3, $4)`, [id, req.auth!.userId, id, JSON.stringify({ aiMonthlyTokenLimit: body.aiMonthlyTokenLimit })]);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+    const { rows } = await db().query(`SELECT ${TENANT_ROW} FROM tenants t WHERE t.id = $1`, [id]);
     return rows[0];
   });
 

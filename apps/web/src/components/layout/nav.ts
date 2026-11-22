@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, GraduationCap, LayoutDashboard, MessageSquare, Megaphone, Radio, Settings, Users, UserSquare2, Workflow, UsersRound, type LucideIcon } from 'lucide-react';
+import { BarChart3, BookOpen, GraduationCap, LayoutDashboard, MessageSquare, Megaphone, Radio, Settings, Users, UserSquare2, Workflow, UsersRound, ShieldCheck, type LucideIcon } from 'lucide-react';
 import type { Permission } from '../../lib/types';
 
 export interface NavItem {
@@ -18,9 +18,10 @@ export const NAV: NavItem[] = [
   { to: '/app/channels', label: 'Channels', icon: Radio, permission: 'overview:read', planned: true },
   { to: '/app/customers', label: 'Customers', icon: UserSquare2, permission: 'overview:read', planned: true },
   { to: '/app/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'overview:read', planned: true },
-  { to: '/app/knowledge', label: 'Business Knowledge', icon: BookOpen, permission: 'overview:read', planned: true },
+  { to: '/app/knowledge', label: 'Business Knowledge', icon: BookOpen, permission: 'knowledge:read' },
   { to: '/app/workflows', label: 'Workflow Builder', icon: Workflow, permission: 'overview:read', planned: true },
-  { to: '/app/teach', label: 'Teach & Correct', icon: GraduationCap, permission: 'overview:read', planned: true },
+  { to: '/app/teach', label: 'Teach & Correct', icon: GraduationCap, permission: 'rules:read' },
+  { to: '/app/activity', label: 'Approvals & Audit', icon: ShieldCheck, permission: 'approvals:read' },
   { to: '/app/performance', label: 'Performance', icon: BarChart3, permission: 'overview:read', planned: true },
   { to: '/app/team', label: 'Team', icon: UsersRound, permission: 'team:read' },
   { to: '/app/settings', label: 'Settings', icon: Settings, permission: 'settings:read' },

@@ -1,59 +1,54 @@
 # PROJECT_STATUS — MicroAgent
 
-**Part 1 (Foundation & UI): implemented and tested.  Part 2: NOT started.**
-Last verified: 2026-11-21.
+**Part 1 (Foundation & UI): done.  Part 2 (AI Employees & Intelligence): implemented and tested against a local stand-in AI — NOT yet tested against the real OpenRouter.  Part 3: NOT started.**
+Last verified: 2026-11-22.
 
 ## Verification summary
 
 | Check | Result |
 |---|---|
-| API integration tests (`npm test`) | 35 / 35 pass |
+| API integration tests (`npm test`) | 115 / 115 pass (policy 19, AI layer 15, knowledge 14, agent runtime 31, platform AI 1, plus Part 1 suites incl. RLS guard) |
 | TypeScript typecheck (api + web) | clean |
 | Production build (`npm run build`) | OK |
-| Browser E2E, business flow (Chromium) | 19 / 19 pass |
-| Browser E2E, platform admin flow (Chromium) | 8 / 8 pass |
+| Browser E2E, Part 2 flows (Chromium, against stand-in AI) | 24 checks pass |
+| Browser E2E, Part 1 (business + admin) | 27 checks pass (earlier run) |
+| Real OpenRouter call | **NOT done** (no key, no network from the build sandbox) |
 
-The two browser scripts were run by hand and are **not** committed as automated tests.
+Browser scripts were run by hand and are **not** committed as automated tests.
+All AI tests use a local stand-in server (`FakeOpenRouter`, tests only). It proves our code handles responses, errors, retries, budgets and cost correctly; it does not prove the quality of any real model.
 
-## Completed
+## Part 2 — completed
 
-**Brand & landing**
-- Original logo mark + wordmark and animated mascot (SVG; eyes follow the pointer, blink, float). Palette: white, burgundy, dark burgundy, light gray.
-- Landing page: hero, animated agent with orbiting chips, scroll-reveal sections, features, how-it-works, security block, Create Your AI Agent + Login. Respects reduced-motion. No horizontal overflow at 390px.
+- **AI Employees:** full profile (name, role, language/dialect, tone, greeting, business description, rules…), 8 multi-select tasks, status gate (draft → tested → live/paused), versions + rollback.
+- **Business Discovery:** website crawl (SSRF-safe), pasted/JSON social posts (default 30, adjustable), PDF, Word, Excel/CSV, product lists, business info. Every fact has source, source reference, date, evidence and status; only confirmed facts reach the employee. Prices are never invented: deterministic table reading, and AI facts must carry an exact quote that contains the number.
+- **Smart questions:** missing price / conflicts / outdated / missing basics; unique per subject (never repeated), at most 5 shown, auto-closed when solved.
+- **Teach & Correct:** knowledge / behavior / workflow updates → structured, editable, versioned, revertible rules; enforced vs “guidance only” clearly labelled; instructions that grant power are refused.
+- **Permissions Engine (backend):** per-action deny / allow / approval, limits, required fields, hand-off always allowed; approvals queue (decide once), audit log, agent-action log.
+- **AI Engine:** OpenRouter provider (timeout, retry/backoff, allow-list), per-company monthly token budget with platform override, tokens + provider-reported cost per call (null when not reported), key only on the server.
+- **Simulation Playground:** single-message test with full trace + real-data scenario suite; activation requires a passing suite for the current configuration.
+- **Isolation:** RLS on all new tables + composite FKs; cross-company tests in API and SQL.
+- **Platform admin:** AI tokens / limit per company.
 
-**Dashboard**
-- Sidebar (desktop) / drawer (mobile), top navigation with user menu, responsive layout, loading skeletons, empty and error states, toasts.
-- Collapsible sidebar (state remembered in the browser). Browser-tested: collapse, persist after reload, expand, navigation, mobile layout of the two new pages.
-- All 12 sections exist in navigation. **Working with real data:** Overview, AI Employees (create / edit / delete), Team (invite, change role, disable, revoke), Settings. **Layout only (empty states):** Conversations, Workflow Builder. **Placeholders:** Channels, Customers, Campaigns, Business Knowledge, Teach & Correct, Performance — each shows an honest "Coming in a later phase" state, no fake numbers.
+## Not completed / known gaps (Part 2)
 
-**Authentication**
-- Sign up (creates business + owner), login, logout (server-side revocation), password reset (single-use, 1 h), invitation acceptance, protected routes (client and API).
+1. **Real OpenRouter never called.** Needs your key; test one Playground message and one suite before going live. Model answer quality is unknown until then.
+2. **Social networks are not synced.** Facebook/Instagram etc. are import-only (paste/JSON). No API connection.
+3. **Channels are not connected** (Part 3). Channel selection is saved only; nothing receives real customer messages.
+4. **No inventory integration.** Any stock/availability claim is blocked by design until one exists.
+5. **Actions are recorded and decided, not executed.** Orders, bookings, refunds, follow-ups do not reach any external system.
+6. **Scanned PDFs / images are not supported** (no OCR). Text PDFs only.
+7. **Guards are text heuristics.** They may miss unusual phrasing (e.g. prices written in words) and may rarely over-block. They sit on top of the Policy Engine.
+8. **Analysis is synchronous** (≤12 AI calls per request); no job queue yet, large sources may be slow.
+9. **Simulation suite** needs a configured AI provider and checks behaviour deterministically; it is not a quality score.
+10. Rate limit store is in-memory per process (unchanged from Part 1).
+11. UI is English only; no RTL. Only Chromium tested.
+12. `npm audit`: 2 moderate (uuid via exceljs). exceljs uses uuid v4 without the `buf` argument, so the advisory is not reachable; the only fix is a breaking downgrade, so it is left and documented.
 
-**Multi-tenancy**
-- Tenant isolation enforced by PostgreSQL Row Level Security, with three least-privilege DB roles; fail-closed when no tenant is set; secrets unreadable by app roles.
-- Platform Admin: list/search/filter companies, users count, AI employees count, monthly API usage, suspend/activate (takes effect immediately, sessions blocked).
-- Business Owner: independent account, data, employees, settings.
-- RBAC: owner / admin / manager / viewer / platform_admin.
-
-**Docs:** README, `docs/ARCHITECTURE.md`, `docs/DEPLOY_HOSTINGER.md`, this file.
-
-## Not completed / known gaps (be aware before Part 2)
-
-1. **Reference images (received later, applied):** the sidebar is collapsible to an icon rail; **Conversations** uses the 3-pane inbox layout (views → list → thread); **Workflow Builder** has a dark toolbar, Nodes Library and a dotted canvas. These two pages are **layout only**: no messaging or workflow engine exists yet, so they show empty states (no sample conversations or workflows). Same visual spirit, MicroAgent palette and original artwork — nothing copied from the references.
-2. **Not deployed to a real Hostinger server.** Hostinger Web/Cloud plans do not support PostgreSQL (per their support docs); a **VPS is required**. The deploy guide was written but not executed on Hostinger.
-3. **Email delivery is untested against a real SMTP server.** Without `SMTP_HOST` emails go to an `email_outbox` table (dev only). Reset/invite flows are tested through that outbox.
-4. **UI paths not covered by browser tests:** Team page actions, invitation acceptance screen, password-reset screens, Settings. Their API behaviour is covered by the 35 API tests; the screens themselves were type-checked and built but not clicked through.
-5. Only Chromium was tested. No Safari/Firefox check.
-6. No email verification at signup, no 2FA, no login lockout beyond per-IP rate limiting (in-memory, resets on restart, per process).
-7. One email = one tenant (a person cannot belong to two businesses yet).
-8. Plan/billing fields exist (`trial/starter/growth/scale`) but nothing enforces limits or charges.
-9. Usage metering counts API requests only; AI/messaging usage arrives with the features that produce it.
-10. No Arabic/RTL interface yet (the UI is English). The landing/dashboard layout was not built RTL-ready.
-11. No CI pipeline; no automated backups configured (command documented).
-12. Local dev database was created with generated passwords in `.env` (git-ignored). The `.env` file is not part of the repository.
+## Part 1 gaps still open
+Not deployed to Hostinger (VPS required); SMTP untested against a real server; no email verification/2FA; one email = one tenant; plan/billing not enforced; no CI or automated backups; Safari/Firefox untested.
 
 ## Decisions to carry forward
-See `docs/ARCHITECTURE.md` §10.
+See `docs/ARCHITECTURE.md` §10 and §11–20 (Part 2).
 
-## Next (Part 2) — not started
-Waiting for your go-ahead and your reference images.
+## Next
+Part 3 — **not started**. Waiting for your go-ahead.

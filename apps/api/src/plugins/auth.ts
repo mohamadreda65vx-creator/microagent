@@ -6,6 +6,7 @@ import { forbidden, unauthorized } from '../shared/errors.js';
 import { can, type Permission, type Role } from '../shared/permissions.js';
 import { hashToken } from '../shared/security.js';
 import type { Mailer } from '../shared/mailer.js';
+import type { AiService } from '../ai/service.js';
 
 export const SESSION_COOKIE = 'ma_session';
 
@@ -29,6 +30,7 @@ declare module 'fastify' {
     pools: Pools;
     config: Config;
     mailer: Mailer;
+    ai: AiService;
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requirePermission: (permission: Permission) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requirePlatformAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;

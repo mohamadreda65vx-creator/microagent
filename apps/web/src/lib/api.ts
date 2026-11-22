@@ -15,7 +15,7 @@ export class ApiError extends Error {
 }
 
 interface Options {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
 }
 
@@ -46,5 +46,16 @@ export async function api<T = unknown>(path: string, opts: Options = {}): Promis
     if (res.status === 403 && code === 'tenant_suspended') window.dispatchEvent(new Event('auth:refresh'));
     throw new ApiError(res.status, code, data?.error?.message ?? `Request failed (${res.status})`, data?.error?.details);
   }
+  return data as T;
+}
+
+/** Upload one file (multipart). The browser sets the boundary, so no Content-Type header here. */
+export async function uploadFile<T = unknown>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`/api/v1${path}`, { method: 'POST', body: form, credentials: 'same-origin' });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : undefined;
+  if (!res.ok) throw new ApiError(res.status, data?.error?.code ?? 'error', data?.error?.message ?? `Upload failed (${res.status})`);
   return data as T;
 }

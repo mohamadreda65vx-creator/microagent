@@ -42,6 +42,17 @@ const schema = z.object({
   SMTP_PASS: z.preprocess(emptyToUndefined, z.string().optional()),
   SMTP_FROM: z.string().default('MicroAgent <no-reply@localhost>'),
   WEB_DIST_DIR: z.preprocess(emptyToUndefined, z.string().optional()),
+  // ── AI (OpenRouter). The key lives ONLY here, on the server. It is never sent to the browser.
+  OPENROUTER_API_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
+  OPENROUTER_BASE_URL: z.string().url().default('https://openrouter.ai/api/v1'),
+  OPENROUTER_DEFAULT_MODEL: z.string().default('openai/gpt-4o-mini'),
+  OPENROUTER_MODELS: z.preprocess(emptyToUndefined, z.string().optional()),
+  AI_MONTHLY_TOKEN_LIMIT: z.coerce.number().int().min(0).default(2_000_000),
+  AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(45_000),
+  AI_MAX_RETRIES: z.coerce.number().int().min(0).max(6).default(3),
+  AI_RETRY_BASE_MS: z.coerce.number().int().min(0).max(10_000).default(400),
+  // Only for automated tests that fetch from 127.0.0.1. Ignored in production.
+  ALLOW_PRIVATE_FETCH: z.string().optional().transform((v) => v === 'true' || v === '1'),
 });
 
 export type Config = {
@@ -55,6 +66,18 @@ export type Config = {
   sessionTtlDays: number;
   smtp: { host?: string; port: number; user?: string; pass?: string; from: string };
   webDistDir: string;
+  ai: {
+    apiKey?: string;
+    baseUrl: string;
+    defaultModel: string;
+    /** Allowed models. Empty = any model the provider lists. */
+    models: string[];
+    monthlyTokenLimit: number;
+    timeoutMs: number;
+    maxRetries: number;
+    retryBaseMs: number;
+  };
+  allowPrivateFetch: boolean;
 };
 
 const apiRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -77,6 +100,17 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
     sessionTtlDays: e.SESSION_TTL_DAYS,
     smtp: { host: e.SMTP_HOST, port: e.SMTP_PORT, user: e.SMTP_USER, pass: e.SMTP_PASS, from: e.SMTP_FROM },
     webDistDir: e.WEB_DIST_DIR ?? path.resolve(apiRoot, '..', 'web', 'dist'),
+    ai: {
+      apiKey: e.OPENROUTER_API_KEY,
+      baseUrl: e.OPENROUTER_BASE_URL.replace(/\/+$/, ''),
+      defaultModel: e.OPENROUTER_DEFAULT_MODEL,
+      models: (e.OPENROUTER_MODELS ?? '').split(',').map((m) => m.trim()).filter(Boolean),
+      monthlyTokenLimit: e.AI_MONTHLY_TOKEN_LIMIT,
+      timeoutMs: e.AI_TIMEOUT_MS,
+      maxRetries: e.AI_MAX_RETRIES,
+      retryBaseMs: e.AI_RETRY_BASE_MS,
+    },
+    allowPrivateFetch: e.NODE_ENV !== 'production' && (e.ALLOW_PRIVATE_FETCH ?? false),
   };
 }
 

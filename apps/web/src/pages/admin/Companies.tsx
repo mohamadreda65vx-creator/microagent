@@ -3,7 +3,7 @@ import { Activity, Building2, Search, UserCheck, Users } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../../lib/api';
 import type { PlatformSummary, PlatformTenant } from '../../lib/types';
-import { Badge, Button, Card, EmptyState, ErrorState, Modal, Skeleton } from '../../components/ui/primitives';
+import { Badge, Button, Card, EmptyState, ErrorState, FormError, Modal, Skeleton, TextField } from '../../components/ui/primitives';
 import { useToast } from '../../components/ui/Toast';
 
 function Stat({ icon, label, value, sub }: { icon: ReactNode; label: string; value: string | number; sub?: string }) {
@@ -28,6 +28,8 @@ export default function Companies() {
   const [debounced, setDebounced] = useState('');
   const [status, setStatus] = useState<'' | 'active' | 'suspended'>('');
   const [confirm, setConfirm] = useState<PlatformTenant | null>(null);
+  const [limitFor, setLimitFor] = useState<PlatformTenant | null>(null);
+  const [limitText, setLimitText] = useState('');
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
@@ -50,6 +52,13 @@ export default function Companies() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  const saveLimit = useMutation({
+    mutationFn: (t: { id: string; value: number | null }) => api(`/platform/tenants/${t.id}/ai-limit`, { method: 'PATCH', body: { aiMonthlyTokenLimit: t.value } }),
+    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ['platform'] }); toast.success('AI limit updated'); setLimitFor(null); },
+  });
+  const limitValue = limitText.trim() === '' ? null : Number(limitText.replace(/[, ]/g, ''));
+  const limitInvalid = limitValue !== null && (!Number.isInteger(limitValue) || limitValue < 0);
 
   const s = summary.data;
   return (
@@ -103,7 +112,7 @@ export default function Companies() {
           <EmptyState icon={Building2} title={debounced || status ? 'No companies match' : 'No companies yet'} description={debounced || status ? 'Try a different search or filter.' : 'Companies appear here when businesses sign up.'} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="w-full min-w-[900px] text-left text-sm">
               <thead className="bg-mist-50 text-xs tracking-wide text-mist-500 uppercase">
                 <tr>
                   <th className="px-5 py-3 font-medium">Company</th>
@@ -111,6 +120,7 @@ export default function Companies() {
                   <th className="px-3 py-3 text-right font-medium">Users</th>
                   <th className="px-3 py-3 text-right font-medium">AI employees</th>
                   <th className="px-3 py-3 text-right font-medium">Requests (month)</th>
+                  <th className="px-3 py-3 text-right font-medium">AI tokens (month)</th>
                   <th className="px-3 py-3 font-medium">Created</th>
                   <th className="px-5 py-3" />
                 </tr>
@@ -126,8 +136,13 @@ export default function Companies() {
                     <td className="px-3 text-right tabular-nums">{t.usersCount}</td>
                     <td className="px-3 text-right tabular-nums">{t.aiEmployeesCount}</td>
                     <td className="px-3 text-right tabular-nums">{t.apiRequestsMonth.toLocaleString()}</td>
+                    <td className="px-3 text-right tabular-nums">
+                      {Number(t.aiTokensMonth).toLocaleString()}
+                      <span className="block text-[11px] text-mist-500">limit {t.aiMonthlyTokenLimit === null ? 'default' : t.aiMonthlyTokenLimit === 0 ? 'AI off' : Number(t.aiMonthlyTokenLimit).toLocaleString()}</span>
+                    </td>
                     <td className="px-3 text-mist-500">{fmt(t.createdAt)}</td>
-                    <td className="px-5 text-right">
+                    <td className="space-x-2 px-5 text-right whitespace-nowrap">
+                      <Button size="sm" variant="secondary" onClick={() => { setLimitFor(t); setLimitText(t.aiMonthlyTokenLimit === null ? '' : String(t.aiMonthlyTokenLimit)); }}>AI limit</Button>
                       <Button size="sm" variant={t.status === 'active' ? 'danger' : 'secondary'} onClick={() => setConfirm(t)}>
                         {t.status === 'active' ? 'Suspend' : 'Activate'}
                       </Button>
@@ -152,6 +167,16 @@ export default function Companies() {
             {confirm?.status === 'active' ? 'Suspend company' : 'Activate company'}
           </Button>
         </div>
+      </Modal>
+      <Modal open={limitFor !== null} onClose={() => setLimitFor(null)} title={`AI limit for ${limitFor?.name ?? ''}`} description="Monthly token budget for this company. Leave empty to use the platform default. 0 turns AI off for the company.">
+        <form onSubmit={(e) => { e.preventDefault(); if (limitFor && !limitInvalid) saveLimit.mutate({ id: limitFor.id, value: limitValue }); }} className="space-y-4">
+          <FormError error={saveLimit.error} />
+          <TextField label="Tokens per month" inputMode="numeric" value={limitText} onChange={(e) => setLimitText(e.target.value)} placeholder="Platform default" error={limitInvalid ? 'Enter a whole number, 0 or more' : undefined} />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setLimitFor(null)}>Cancel</Button>
+            <Button type="submit" loading={saveLimit.isPending} disabled={limitInvalid}>Save</Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );
