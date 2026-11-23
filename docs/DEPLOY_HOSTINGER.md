@@ -34,6 +34,11 @@ Copy `.env.example` to `.env` and set:
 - the three `DATABASE_URL_*` values pointing at `microagent_prod`
 - `SMTP_*` (password reset and invitations are not delivered without it)
 - `OPENROUTER_API_KEY` (server only; without it AI features report "AI not configured" and employees cannot be activated). Optional: `OPENROUTER_DEFAULT_MODEL`, `OPENROUTER_MODELS`, `AI_MONTHLY_TOKEN_LIMIT`, `AI_TIMEOUT_MS`, `AI_MAX_RETRIES`. **Not tested against the real OpenRouter yet**: after setting the key, run one Playground test and one simulation suite before going live.
+- `CHANNEL_SECRET_KEY` (**required for channels**; 32 random bytes in base64: `openssl rand -base64 32`; back it up: if it changes, saved channel credentials become unreadable).
+- Telegram: needs the public HTTPS `APP_URL` above (the webhook is registered automatically). The server must reach `api.telegram.org`.
+- WhatsApp via QR (unofficial): `EVOLUTION_API_URL` and `EVOLUTION_API_KEY` of your own Evolution API v2 server, which must be able to reach back to `APP_URL/api/v1/webhooks/`.
+- Messenger/Instagram: `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`; in the Meta app set the webhook to `APP_URL/api/v1/webhooks/meta` and the OAuth redirect to `APP_URL/api/v1/channels/meta/oauth/callback`. Needs App Review and business verification before real customers can use it.
+- Run ONE API process (the retry worker and AI queue are in-process).
 - The server must be able to reach `openrouter.ai` and the customer websites it crawls (outbound HTTPS).
 
 `chmod 600 .env`

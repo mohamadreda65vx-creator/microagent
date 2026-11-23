@@ -7,7 +7,8 @@ import { AcceptInvite, ForgotPassword, Login, ResetPassword, Signup } from './pa
 import Companies from './pages/admin/Companies';
 import AiEmployees from './pages/app/AiEmployees';
 import EmployeeEditor from './pages/app/EmployeeEditor';
-import Conversations from './pages/app/Conversations';
+import Inbox from './pages/app/Inbox';
+import Channels from './pages/app/Channels';
 import Activity from './pages/app/Activity';
 import Knowledge from './pages/app/Knowledge';
 import Teach from './pages/app/Teach';
@@ -50,7 +51,9 @@ export default function App() {
           <Route path="knowledge" element={<RequirePermission permission="knowledge:read"><Knowledge /></RequirePermission>} />
           <Route path="teach" element={<RequirePermission permission="rules:read"><Teach /></RequirePermission>} />
           <Route path="activity" element={<RequirePermission permission="approvals:read"><Activity /></RequirePermission>} />
-          <Route path="conversations" element={<Conversations />} />
+          <Route path="channels" element={<RequirePermission permission="channels:read"><Channels /></RequirePermission>} />
+          <Route path="inbox/:platform" element={<RequirePermission permission="conversations:read"><Inbox /></RequirePermission>} />
+          <Route path="conversations" element={<Navigate to="/app/inbox/whatsapp" replace />} />
           <Route path="workflows" element={<Workflows />} />
           {NAV.filter((n) => n.planned && !['/app/conversations', '/app/workflows'].includes(n.to)).map((n) => (
             <Route key={n.to} path={n.to.replace('/app/', '')} element={<Planned />} />

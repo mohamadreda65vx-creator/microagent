@@ -1,5 +1,6 @@
-import { BarChart3, BookOpen, GraduationCap, LayoutDashboard, MessageSquare, Megaphone, Radio, Settings, Users, UserSquare2, Workflow, UsersRound, ShieldCheck, type LucideIcon } from 'lucide-react';
-import type { Permission } from '../../lib/types';
+import { PLATFORMS } from '../../lib/platforms';
+import { BarChart3, BookOpen, GraduationCap, LayoutDashboard, Megaphone, Radio, Settings, Users, UserSquare2, Workflow, UsersRound, ShieldCheck, type LucideIcon } from 'lucide-react';
+import type { ChannelType, Permission } from '../../lib/types';
 
 export interface NavItem {
   to: string;
@@ -9,13 +10,17 @@ export interface NavItem {
   /** Not built yet: the page shows an honest "coming in a later phase" state instead of fake data. */
   planned?: boolean;
   end?: boolean;
+  /** Section heading shown above the first item of a group. */
+  group?: string;
+  /** Platform whose unread counter is shown as a badge. */
+  badge?: ChannelType;
 }
 
 export const NAV: NavItem[] = [
   { to: '/app', label: 'Overview', icon: LayoutDashboard, permission: 'overview:read', end: true },
   { to: '/app/ai-employees', label: 'AI Employees', icon: Users, permission: 'ai_employees:read' },
-  { to: '/app/conversations', label: 'Conversations', icon: MessageSquare, permission: 'overview:read', planned: true },
-  { to: '/app/channels', label: 'Channels', icon: Radio, permission: 'overview:read', planned: true },
+  { to: '/app/channels', label: 'Channels', icon: Radio, permission: 'channels:read' },
+  ...PLATFORMS.map((p, i): NavItem => ({ to: `/app/inbox/${p.slug}`, label: p.label, icon: p.icon, permission: 'conversations:read', badge: p.type, group: i === 0 ? 'Conversations' : undefined })),
   { to: '/app/customers', label: 'Customers', icon: UserSquare2, permission: 'overview:read', planned: true },
   { to: '/app/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'overview:read', planned: true },
   { to: '/app/knowledge', label: 'Business Knowledge', icon: BookOpen, permission: 'knowledge:read' },
@@ -28,7 +33,6 @@ export const NAV: NavItem[] = [
 ];
 
 export const PLANNED_COPY: Record<string, { title: string; description: string }> = {
-  conversations: { title: 'Conversations', description: 'Every customer conversation your AI employees handle will appear here, with full history and hand-off to your team.' },
   channels: { title: 'Channels', description: 'Connect Messenger, WhatsApp, Instagram and your website chat so your AI employees can reach customers.' },
   customers: { title: 'Customers', description: 'A profile for every person who talks to your business, with their conversation history and details.' },
   campaigns: { title: 'Campaigns', description: 'Send planned outreach and follow-ups through your AI employees, and see what works.' },

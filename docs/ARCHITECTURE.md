@@ -199,3 +199,27 @@ Timeout, retry with exponential backoff + jitter (408/409/425/429/5xx/network/ti
 - Channels (Part 3) will call the same `runTurn(mode: 'live')`; live `agent_actions` already flow into the Approvals queue (the UI separates live from Playground tests). Executing an approved/allowed action against real systems (orders, bookings, CRM) is **not** implemented: Part 2 records and decides, it does not execute.
 - Inventory: introduce an inventory connector and flip `inventoryConnected` in the policy context; until then stock claims are blocked by design.
 - Long analyses currently run inside the request (≤12 AI calls). A job queue is the next step if sources get large.
+
+## 21. Part 3 — Channels & conversations
+
+**Layers.** `channels/*.ts` connectors (Telegram, Evolution WhatsApp, Meta, Website; WhatsApp Cloud stub, TikTok unavailable) only translate between a provider and the normalized types (`InboundMessage`, `WebhookEvent`, `ChannelError`). They never touch the DB or the AI. `ChannelManager` owns storage, idempotency, delivery, retry, health and the bridge to the Part 2 runtime. Registry key `type:provider` makes replacing a provider a one-connector change.
+
+**Tables (migration 0007/0008).** `channels`, `contacts`, `conversations`, `messages`, `message_files`, `webhook_events`, `message_forwards`; `agent_actions.conversation_id`. RLS `tenant_id = app_current_tenant()` on all. **Platform separation is a database rule:** `conversations` has composite FKs `(tenant, channel, platform) → channels(tenant, id, type)` and `(tenant, channel, contact) → contacts`; `messages` has `(tenant, channel, conversation) → conversations`. A message cannot point to a conversation of another channel/platform. The platform-admin role has no grants on these tables.
+
+**Webhooks.** Public endpoints resolve the tenant through SECURITY DEFINER functions (`channel_resolve`, `channel_resolve_external`) that return only what is needed. Verification: Telegram `secret_token` header, Evolution custom secret header + instance name, Meta `X-Hub-Signature-256` HMAC over the raw body. Every event is logged in `webhook_events` (pruned at 14 days).
+
+**Idempotency.** Unique `(channel_id, direction, external_id)` + `INSERT … ON CONFLICT DO NOTHING`; a replayed webhook creates nothing and does not trigger the AI twice.
+
+**Delivery.** Statuses received/queued/sending/retry/sent/delivered/read/failed; claim by UPDATE; backoff 30s/2m/10m/30m, max 5 attempts; recipient errors don't degrade channel health, auth errors set the channel to `error`. A worker `tick()` handles due retries, stuck queued messages, pending AI recovery and health checks (in-process, single instance; functions `worker_*` return IDs only).
+
+**Credentials.** AES-256-GCM (`v1.iv.tag.ct`, key `CHANNEL_SECRET_KEY`); HKDF-derived purpose-bound keys for widget visitor tokens and Meta OAuth state; never returned by the API; scrubbed from errors; Meta tokens travel in the Authorization header.
+
+**AI bridge.** Inbound message → `ai_state` pending/skipped → one `runTurn` per batch per conversation (serialized) → reply saved and delivered. Hand-off sets handler `human`, status `pending`. A staff reply takes over. `aiState` tells the UI why nobody is answering.
+
+**Forwarding.** Always a new message ("↪ Forwarded from {Platform} · {name} · {time} UTC" + comment); preview endpoint; recorded in `message_forwards` and audit `message.forwarded`.
+
+**Permissions.** `channels:read|manage`, `conversations:read|reply|manage|forward` (manager: read/reply/manage/forward; viewer: read).
+
+**API (under `/api/v1`).** `/channels` (catalog, CRUD, connect, status/QR, reconnect, disconnect, health-check, contacts, Meta oauth), `/conversations` (summary, list — `platform` required —, detail, messages, read, reply, attachments, status/assign, takeover, release), `/messages/:id/{retry,forward,forward/preview,forwards,attachments/:i}`, public `/webhooks/channel/:key`, `/webhooks/meta`, `/widget.js`, `/widget/:key/*`.
+
+**UI.** `/app/channels`, and one route per platform `/app/inbox/{whatsapp|messenger|instagram|telegram|website}` (three panes: filters+list, thread, customer details).

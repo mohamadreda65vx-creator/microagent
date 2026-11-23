@@ -19,6 +19,8 @@ export interface TurnInput {
   history: ChatMessage[]; // previous turns (user/assistant)
   message: string; // the new customer message
   runId?: string | null;
+  /** Live turns: the customer conversation this turn belongs to. */
+  conversationId?: string | null;
   actorUserId?: string | null;
   /** Simulation only: run against an unsaved/draft configuration without persisting actions. */
   persist?: boolean;
@@ -179,9 +181,9 @@ async function persist(app: FastifyInstance, input: TurnInput, result: TurnResul
   await withTenant(app.pools.app, input.tenantId, async (c) => {
     for (const d of result.decisions) {
       await c.query(
-        `INSERT INTO agent_actions (tenant_id, employee_id, run_id, mode, type, params, decision, reasons, approval_status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [input.tenantId, input.employeeId, input.runId ?? null, input.mode, d.type, JSON.stringify(d.params), d.decision, JSON.stringify(d.reasons), d.decision === 'pending_approval' ? 'pending' : null],
+        `INSERT INTO agent_actions (tenant_id, employee_id, run_id, mode, type, params, decision, reasons, approval_status, conversation_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [input.tenantId, input.employeeId, input.runId ?? null, input.mode, d.type, JSON.stringify(d.params), d.decision, JSON.stringify(d.reasons), d.decision === 'pending_approval' ? 'pending' : null, input.conversationId ?? null],
       );
       if (d.decision !== 'allowed') {
         await audit(c, input.tenantId, input.actorUserId ?? null, `agent_action.${d.decision}`, 'ai_employee', input.employeeId, { type: d.type, mode: input.mode, reasons: d.reasons.map((r) => r.code) });

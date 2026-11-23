@@ -29,6 +29,14 @@ export const PERMISSIONS = [
   'approvals:read',
   'approvals:decide',
   'audit:read',
+  'channels:read',
+  /** Connect/disconnect channels (they hold credentials). */
+  'channels:manage',
+  'conversations:read',
+  'conversations:reply',
+  /** Assign, change status, take over / hand back to the AI. */
+  'conversations:manage',
+  'conversations:forward',
   'team:read',
   'team:manage',
   'settings:read',
@@ -50,6 +58,12 @@ const tenantAll: Permission[] = [
   'approvals:read',
   'approvals:decide',
   'audit:read',
+  'channels:read',
+  'channels:manage',
+  'conversations:read',
+  'conversations:reply',
+  'conversations:manage',
+  'conversations:forward',
   'team:read',
   'team:manage',
   'settings:read',
@@ -60,8 +74,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   platform_admin: ['platform:manage'],
   owner: tenantAll,
   admin: tenantAll,
-  manager: ['overview:read', 'ai_employees:read', 'ai_employees:write', 'knowledge:read', 'knowledge:write', 'rules:read', 'rules:write', 'simulation:run', 'approvals:read', 'approvals:decide', 'team:read', 'settings:read'],
-  viewer: ['overview:read', 'ai_employees:read', 'knowledge:read', 'rules:read', 'approvals:read', 'team:read', 'settings:read'],
+  manager: ['overview:read', 'ai_employees:read', 'ai_employees:write', 'knowledge:read', 'knowledge:write', 'rules:read', 'rules:write', 'simulation:run', 'approvals:read', 'approvals:decide', 'channels:read', 'conversations:read', 'conversations:reply', 'conversations:manage', 'conversations:forward', 'team:read', 'settings:read'],
+  viewer: ['overview:read', 'ai_employees:read', 'knowledge:read', 'rules:read', 'approvals:read', 'channels:read', 'conversations:read', 'team:read', 'settings:read'],
 };
 
 export function can(role: Role, permission: Permission): boolean {

@@ -51,6 +51,17 @@ const schema = z.object({
   AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(180_000).default(45_000),
   AI_MAX_RETRIES: z.coerce.number().int().min(0).max(6).default(3),
   AI_RETRY_BASE_MS: z.coerce.number().int().min(0).max(10_000).default(400),
+  // ── Channels (Part 3)
+  /** 32 random bytes, base64. Encrypts channel credentials at rest and signs widget/OAuth tokens. */
+  CHANNEL_SECRET_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
+  EVOLUTION_API_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  EVOLUTION_API_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
+  TELEGRAM_API_BASE: z.string().url().default('https://api.telegram.org'),
+  META_APP_ID: z.preprocess(emptyToUndefined, z.string().optional()),
+  META_APP_SECRET: z.preprocess(emptyToUndefined, z.string().optional()),
+  META_VERIFY_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
+  META_GRAPH_BASE: z.string().url().default('https://graph.facebook.com'),
+  META_GRAPH_VERSION: z.string().default('v21.0'),
   // Only for automated tests that fetch from 127.0.0.1. Ignored in production.
   ALLOW_PRIVATE_FETCH: z.string().optional().transform((v) => v === 'true' || v === '1'),
 });
@@ -78,6 +89,13 @@ export type Config = {
     retryBaseMs: number;
   };
   allowPrivateFetch: boolean;
+  channels: {
+    /** Decoded CHANNEL_SECRET_KEY (32 bytes) or undefined when not configured. */
+    secretKey?: Buffer;
+    evolution: { url?: string; key?: string };
+    telegramApiBase: string;
+    meta: { appId?: string; appSecret?: string; verifyToken?: string; graphBase: string; version: string };
+  };
 };
 
 const apiRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -109,6 +127,12 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
       timeoutMs: e.AI_TIMEOUT_MS,
       maxRetries: e.AI_MAX_RETRIES,
       retryBaseMs: e.AI_RETRY_BASE_MS,
+    },
+    channels: {
+      secretKey: e.CHANNEL_SECRET_KEY ? Buffer.from(e.CHANNEL_SECRET_KEY, 'base64') : undefined,
+      evolution: { url: e.EVOLUTION_API_URL?.replace(/\/+$/, ''), key: e.EVOLUTION_API_KEY },
+      telegramApiBase: e.TELEGRAM_API_BASE.replace(/\/+$/, ''),
+      meta: { appId: e.META_APP_ID, appSecret: e.META_APP_SECRET, verifyToken: e.META_VERIFY_TOKEN, graphBase: e.META_GRAPH_BASE.replace(/\/+$/, ''), version: e.META_GRAPH_VERSION },
     },
     allowPrivateFetch: e.NODE_ENV !== 'production' && (e.ALLOW_PRIVATE_FETCH ?? false),
   };

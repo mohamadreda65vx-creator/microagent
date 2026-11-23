@@ -6,6 +6,7 @@ import { loadConfig, withDatabase, type Config } from '../src/config/env.js';
 import { runMigrations } from '../src/db/migrate.js';
 import { hashPassword } from '../src/shared/security.js';
 import { FakeOpenRouter } from './fake-openrouter.js';
+import { FakeEvolution, FakeGraph, FakeTelegram } from './fake-channels.js';
 
 export const PASSWORD = 'Correct-horse-battery-1';
 
@@ -16,10 +17,14 @@ export interface TestEnv {
   owner: pg.Pool;
   /** Local stand-in for OpenRouter (tests only). */
   fake: FakeOpenRouter;
+  /** Local stand-ins for the channel providers (tests only). */
+  tg: FakeTelegram;
+  evo: FakeEvolution;
+  graph: FakeGraph;
   close(): Promise<void>;
 }
 
-export function testConfig(fakeUrl = 'http://127.0.0.1:9', withKey = true): Config {
+export function testConfig(fakeUrl = 'http://127.0.0.1:9', withKey = true, providers: { tg?: string; evo?: string; graph?: string } = {}): Config {
   const base = loadConfig();
   const db = base.testDatabaseName;
   return {
@@ -29,13 +34,21 @@ export function testConfig(fakeUrl = 'http://127.0.0.1:9', withKey = true): Conf
     db: { owner: withDatabase(base.db.owner, db), app: withDatabase(base.db.app, db), platform: withDatabase(base.db.platform, db) },
     ai: { ...base.ai, apiKey: withKey ? 'test-key-SECRET' : undefined, baseUrl: fakeUrl, retryBaseMs: 1, maxRetries: 3, timeoutMs: 1500, models: [], monthlyTokenLimit: 1_000_000 },
     allowPrivateFetch: true,
+    channels: {
+      secretKey: Buffer.alloc(32, 7),
+      evolution: { url: providers.evo ?? 'http://127.0.0.1:9', key: 'evo-global-key' },
+      telegramApiBase: providers.tg ?? 'http://127.0.0.1:9',
+      meta: { appId: 'APP-ID', appSecret: 'APP-SECRET-xyz', verifyToken: 'VERIFY-ME', graphBase: providers.graph ?? 'http://127.0.0.1:9', version: 'v21.0' },
+    },
   };
 }
 
 export async function createTestEnv(opts: { rateLimit?: boolean; noAi?: boolean } = {}): Promise<TestEnv> {
   const fake = new FakeOpenRouter();
   await fake.start();
-  const config = testConfig(fake.url, !opts.noAi);
+  const tg = new FakeTelegram(); const evo = new FakeEvolution(); const graph = new FakeGraph();
+  await Promise.all([tg.start(), evo.start(), graph.start()]);
+  const config = testConfig(fake.url, !opts.noAi, { tg: tg.url, evo: evo.url, graph: graph.url });
   await runMigrations(config.db.owner, () => {});
   const owner = new pg.Pool({ connectionString: config.db.owner, max: 2 });
   await owner.query('TRUNCATE tenants, users, email_outbox, audit_logs RESTART IDENTITY CASCADE');
@@ -46,10 +59,13 @@ export async function createTestEnv(opts: { rateLimit?: boolean; noAi?: boolean 
     config,
     owner,
     fake,
+    tg,
+    evo,
+    graph,
     async close() {
       await app.close();
       await owner.end();
-      await fake.stop();
+      await Promise.all([fake.stop(), tg.stop(), evo.stop(), graph.stop()]);
     },
   };
 }

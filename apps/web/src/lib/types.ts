@@ -4,6 +4,12 @@ export type Permission =
   | 'ai_employees:read'
   | 'ai_employees:write'
   | 'ai_permissions:manage'
+  | 'channels:read'
+  | 'channels:manage'
+  | 'conversations:read'
+  | 'conversations:reply'
+  | 'conversations:manage'
+  | 'conversations:forward'
   | 'knowledge:read'
   | 'knowledge:write'
   | 'rules:read'
@@ -159,3 +165,86 @@ export interface PlatformTenant {
   aiTokensMonth: number;
   aiCostMonthUsd: number | null;
 }
+
+/* ───────── Part 3: channels & conversations ───────── */
+export type ChannelType = 'whatsapp' | 'messenger' | 'instagram' | 'telegram' | 'website' | 'tiktok';
+export type ChannelStatus = 'pending' | 'connecting' | 'connected' | 'disconnected' | 'error' | 'awaiting_approval' | 'not_configured';
+export interface ChannelCapabilities { sendFiles: boolean; deliveryStatus: boolean; replyWindowHours: number | null; maxTextLength: number }
+export interface CatalogItem { type: ChannelType; label: string; provider: string; available: boolean; setup: 'token' | 'qr' | 'oauth' | 'none'; serverReady: boolean; unofficial: boolean; notes: string[]; capabilities: ChannelCapabilities }
+export interface Channel {
+  id: string;
+  type: ChannelType;
+  provider: string;
+  name: string;
+  status: ChannelStatus;
+  employeeId: string | null;
+  employeeName: string | null;
+  employeeStatus: EmployeeStatus | null;
+  autoReply: boolean;
+  config: Record<string, unknown> & { title?: string; welcome?: string; color?: string; allowedOrigins?: string[]; verified?: boolean };
+  healthStatus: 'healthy' | 'degraded' | 'down' | 'unknown';
+  lastHealthAt: string | null;
+  lastError: string | null;
+  lastErrorAt: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
+  consecutiveFailures: number;
+  createdAt: string;
+  conversations: number;
+  unread: number;
+  failedMessages: number;
+  hasQr: boolean;
+  account: string | null;
+  webhookUrl: string | null;
+  setup: 'token' | 'qr' | 'oauth' | 'none';
+  unofficial: boolean;
+  pendingPages: Array<{ id: string; name: string; igId?: string; igUsername?: string }>;
+  capabilities: ChannelCapabilities;
+  publicKey?: string;
+  recentEvents?: Array<{ id: number; kind: string; status: string; detail: string | null; createdAt: string }>;
+  last24h?: { rejected: number; errors: number; duplicates: number };
+}
+export type ConvStatus = 'open' | 'pending' | 'resolved';
+export type AiState = 'ai_answering' | 'human_has_it' | 'no_employee' | 'employee_not_live' | 'auto_reply_off' | 'channel_not_connected';
+export interface Conversation {
+  id: string;
+  platform: ChannelType;
+  channelId: string;
+  channelName: string;
+  channelStatus: ChannelStatus;
+  status: ConvStatus;
+  handler: 'ai' | 'human';
+  assignedTo: { id: string; name: string } | null;
+  employeeId: string | null;
+  employeeName: string | null;
+  unreadCount: number;
+  lastMessageAt: string;
+  lastMessagePreview: string;
+  lastInboundAt: string | null;
+  handoffReason: string | null;
+  handoffAt: string | null;
+  createdAt: string;
+  contact: { id: string; name: string | null; phone: string | null; externalId?: string; firstSeenAt: string };
+  aiState: AiState;
+  stats?: { messages: number; inbound: number };
+  capabilities?: ChannelCapabilities;
+  platformLabel?: string;
+}
+export interface ConversationList { platform: ChannelType; items: Conversation[]; next: string | null; counts: { all: number; unread: number; unassigned: number; mine: number; pending: number; open: number; resolved: number; human: number } }
+export interface ChatAttachment { kind: string; name?: string; mime?: string; size?: number; fileId?: string }
+export interface ChatMessage {
+  id: string;
+  direction: 'in' | 'out';
+  senderType: 'customer' | 'ai' | 'human' | 'system';
+  senderName: string | null;
+  body: string;
+  attachments: ChatAttachment[];
+  status: 'received' | 'queued' | 'sending' | 'retry' | 'sent' | 'delivered' | 'read' | 'failed';
+  error: string | null;
+  errorCode: string | null;
+  attempts: number;
+  meta: { forward?: { fromPlatform: string }; ai?: { blocked?: string[]; error?: string | null } };
+  createdAt: string;
+  forwardCount: number;
+}
+export interface PlatformCounters { total: number; unreadConversations: number; unread: number; needsHuman: number }

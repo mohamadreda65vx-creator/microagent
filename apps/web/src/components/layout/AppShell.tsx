@@ -6,6 +6,9 @@ import clsx from 'clsx';
 import { useAuth } from '../../lib/auth';
 import { Logo, LogoMark } from '../brand/Logo';
 import { Badge } from '../ui/primitives';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../lib/api';
+import type { PlatformCounters } from '../../lib/types';
 import { NAV } from './nav';
 
 const roleLabel: Record<string, string> = { platform_admin: 'Platform admin', owner: 'Owner', admin: 'Admin', manager: 'Manager', viewer: 'Viewer' };
@@ -17,6 +20,13 @@ function initials(name: string) {
 function SidebarLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed: boolean }) {
   const { can, me } = useAuth();
   const items = me?.user.role === 'platform_admin' ? [] : NAV.filter((n) => can(n.permission));
+  // Unread counters per platform (kept separate on purpose: one badge per platform section).
+  const summary = useQuery({
+    queryKey: ['conversations', 'summary'],
+    queryFn: () => api<{ platforms: Record<string, PlatformCounters> }>('/conversations/summary'),
+    enabled: can('conversations:read'),
+    refetchInterval: 15_000,
+  });
   return (
     <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4" aria-label="Main">
       {me?.user.role === 'platform_admin' ? (
@@ -25,11 +35,17 @@ function SidebarLinks({ onNavigate, collapsed }: { onNavigate?: () => void; coll
         </NavLink>
       ) : null}
       {items.map((n) => (
-        <NavLink key={n.to} to={n.to} end={n.end} onClick={onNavigate} title={collapsed ? n.label : undefined} aria-label={n.label} className={({ isActive }) => linkCls(isActive, collapsed)}>
+        <div key={n.to}>
+        {n.group && !collapsed ? <p className="mt-4 mb-1 px-3 text-[11px] font-semibold tracking-wide text-burgundy-300/80 uppercase">{n.group}</p> : n.group ? <div className="my-2 h-px bg-white/10" /> : null}
+        <NavLink to={n.to} end={n.end} onClick={onNavigate} title={collapsed ? n.label : undefined} aria-label={n.label} className={({ isActive }) => linkCls(isActive, collapsed)}>
           <n.icon className="size-[18px] shrink-0" strokeWidth={1.8} />
           {collapsed ? null : <span className="flex-1 truncate">{n.label}</span>}
           {n.planned && !collapsed ? <span className="size-1.5 shrink-0 rounded-full bg-burgundy-400" title="Coming in a later phase" aria-label="Coming soon" /> : null}
+          {n.badge && summary.data?.platforms[n.badge]?.unread ? (
+            <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-burgundy-500 px-1.5 text-[11px] font-semibold text-white" aria-label={`${summary.data.platforms[n.badge]!.unread} unread`}>{summary.data.platforms[n.badge]!.unread}</span>
+          ) : null}
         </NavLink>
+        </div>
       ))}
     </nav>
   );

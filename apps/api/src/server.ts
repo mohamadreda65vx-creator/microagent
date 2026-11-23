@@ -11,6 +11,8 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   });
 }
 
+app.channels.start();
+
 try {
   await app.listen({ host: config.host, port: config.port });
 } catch (err) {

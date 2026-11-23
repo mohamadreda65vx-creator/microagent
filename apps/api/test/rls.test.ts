@@ -188,7 +188,7 @@ describe('row level security (database level, no application code)', () => {
       JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'tenant_id' AND NOT a.attisdropped
       WHERE n.nspname = 'public' AND c.relkind = 'r'`);
     const names = rows.map((r) => r.table).sort();
-    assert.deepEqual(names, ['agent_actions', 'ai_employee_versions', 'ai_employees', 'ai_usage', 'audit_logs', 'business_questions', 'employee_sources', 'invitations', 'knowledge_items', 'knowledge_sources', 'simulation_runs', 'source_contents', 'teach_rule_versions', 'teach_rules', 'usage_daily', 'users'], 'unexpected set of tenant tables — update this guard together with the new migration');
+    assert.deepEqual(names, ['agent_actions', 'ai_employee_versions', 'ai_employees', 'ai_usage', 'audit_logs', 'business_questions', 'channels', 'contacts', 'conversations', 'employee_sources', 'invitations', 'knowledge_items', 'knowledge_sources', 'message_files', 'message_forwards', 'messages', 'simulation_runs', 'source_contents', 'teach_rule_versions', 'teach_rules', 'usage_daily', 'users', 'webhook_events'], 'unexpected set of tenant tables — update this guard together with the new migration');
     // `tenants` itself is keyed by id rather than tenant_id, so it is checked explicitly.
     const t = await env.owner.query(`SELECT relrowsecurity FROM pg_class WHERE relname = 'tenants' AND relkind = 'r'`);
     assert.equal(t.rows[0].relrowsecurity, true, 'tenants must have RLS enabled');
@@ -202,7 +202,7 @@ describe('row level security (database level, no application code)', () => {
     const { rows } = await env.owner.query<{ table_name: string; grantee: string }>(`
       SELECT DISTINCT table_name, grantee FROM information_schema.role_table_grants
       WHERE table_schema = 'public' AND grantee IN ('microagent_app', 'microagent_platform')`);
-    const allowed = new Set(['tenants', 'users', 'invitations', 'ai_employees', 'usage_daily', 'audit_logs', 'email_outbox', ...['agent_actions', 'ai_employee_versions', 'ai_usage', 'business_questions', 'employee_sources', 'knowledge_items', 'knowledge_sources', 'simulation_runs', 'source_contents', 'teach_rule_versions', 'teach_rules']]);
+    const allowed = new Set(['tenants', 'users', 'invitations', 'ai_employees', 'usage_daily', 'audit_logs', 'email_outbox', ...['agent_actions', 'ai_employee_versions', 'ai_usage', 'business_questions', 'employee_sources', 'knowledge_items', 'knowledge_sources', 'simulation_runs', 'source_contents', 'teach_rule_versions', 'teach_rules', 'channels', 'contacts', 'conversations', 'message_files', 'message_forwards', 'messages', 'webhook_events']]);
     for (const r of rows) assert.ok(allowed.has(r.table_name), `${r.grantee} unexpectedly has privileges on ${r.table_name}`);
     // Secret columns must never be READABLE. (The app may INSERT a token_hash when creating an invitation:
     // write-only is intended, so only SELECT is forbidden here.)
