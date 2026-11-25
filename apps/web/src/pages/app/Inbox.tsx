@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import clsx from 'clsx';
 import { AlertTriangle, ArrowLeft, Bot, Check, CheckCheck, Clock, CornerUpRight, Hand, Inbox as InboxIcon, Paperclip, RefreshCw, Search, Send, UserRound, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { Badge, Button, Card, EmptyState, ErrorState, FormError, Modal, Skeleton, TextAreaField, TextField } from '../../components/ui/primitives';
 import { useToast } from '../../components/ui/Toast';
 import { api } from '../../lib/api';
@@ -51,7 +51,8 @@ function InboxFor({ type }: { type: ChannelType }) {
   const [channelId, setChannelId] = useState('');
   const [searchText, setSearchText] = useState('');
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [selected, setSelected] = useState<string | null>(params.get('c'));
   useEffect(() => { const t = setTimeout(() => setSearch(searchText.trim()), 300); return () => clearTimeout(t); }, [searchText]);
 
   const channels = useQuery({ queryKey: ['channels'], queryFn: () => api<{ items: Channel[] }>('/channels'), enabled: can('channels:read') });
@@ -251,7 +252,7 @@ function Tick({ m }: { m: ChatMessage }) {
 
 function Bubble({ m, showDate, canForward, onForward, onRetry }: { m: ChatMessage; showDate: boolean; canForward: boolean; onForward: () => void; onRetry: () => void }) {
   const out = m.direction === 'out';
-  const who = m.senderType === 'ai' ? 'AI employee' : m.senderType === 'human' ? (m.senderName ?? 'Team') : m.senderType === 'system' ? 'System' : null;
+  const who = m.meta.campaign ? `Campaign · ${m.meta.campaign.name}` : m.senderType === 'ai' ? 'AI employee' : m.senderType === 'human' ? (m.senderName ?? 'Team') : m.senderType === 'system' ? 'System' : null;
   return (
     <>
       {showDate ? <p className="py-2 text-center text-[11px] font-medium text-mist-400">{new Date(m.createdAt).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</p> : null}

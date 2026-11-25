@@ -1,0 +1,43 @@
+// Manual browser E2E harness (NOT a test): real API + real built web UI + local stand-ins for providers.
+import { createTestEnv, signupTenant, inviteMember } from './helpers.js';
+const env = await createTestEnv();
+const PORT = 5173;
+env.app.config.appUrl = 'https://app.example.test'; // Telegram needs https for webhook registration
+const a = await signupTenant(env, 'Cafe Nile');
+const emp = (await a.client.post('/ai-employees', { name: 'Nour', tasks: ['sales_assistant', 'customer_support', 'human_handoff'] })).body.id;
+await a.client.post('/knowledge/items', { kind: 'product', name: 'Latte', data: { price: 45, currency: 'EGP' } });
+await env.owner.query(`UPDATE ai_employees SET status='active' WHERE id=$1`, [emp]);
+const reply = (text: string) => JSON.stringify({ reply: text, actions: [] });
+env.fake.responder = (body: any) => {
+  const sys = String(body.messages?.[0]?.content ?? '');
+  if (/campaign/i.test(sys) && /improvements/.test(sys)) return JSON.stringify({ name: 'Ramadan latte offer', platform: 'telegram', audience: { lastInteraction: { withinDays: 90 } }, message: 'Hi {{first_name}}, our latte is 20% off this week! Reply to order.', improvements: ['Add an end date to create urgency.'], questions: [] });
+  const last = [...body.messages].reverse().find((m: any) => m.role === 'user')?.content ?? '';
+  return /latte/i.test(String(last)) ? reply('The latte costs 45 EGP.') : reply('Sorry, I will check with the team.');
+};
+const T1 = '111111:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', T2 = '222222:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+env.tg.addBot(T1, 111111, 'cafe_bot'); env.tg.addBot(T2, 222222, 'staff_bot');
+const c1 = (await a.client.post('/channels', { type: 'telegram', name: 'Cafe bot', employeeId: emp })).body;
+const c2 = (await a.client.post('/channels', { type: 'telegram', name: 'Staff bot' })).body;
+await a.client.post(`/channels/${c1.id}/connect`, { botToken: T1 });
+await a.client.post(`/channels/${c2.id}/connect`, { botToken: T2 });
+const w = (await a.client.post('/channels', { type: 'website', name: 'Cafe site', employeeId: emp, config: { title: 'Chat with Cafe Nile' } })).body;
+const key = async (id: string) => (await env.owner.query('SELECT public_key FROM channels WHERE id=$1', [id])).rows[0].public_key as string;
+const sec = (t: string) => env.tg.webhooks.get(t)!.secret;
+let n = 0;
+const upd = (chat: number, mid: number, name: string, text: string) => ({ update_id: ++n, message: { message_id: mid, date: Math.floor(Date.now() / 1000), from: { id: chat, is_bot: false, first_name: name }, chat: { id: chat, type: 'private', first_name: name }, text } });
+const send = (k: string, s: string, p: object) => env.app.inject({ method: 'POST', url: `/api/v1/webhooks/channel/${k}`, payload: p, headers: { 'x-telegram-bot-api-secret-token': s } });
+await send(await key(c1.id), sec(T1), upd(5001, 1, 'Sara', 'How much is the latte?'));
+await send(await key(c1.id), sec(T1), upd(5002, 1, 'Omar', 'I want to talk to a manager about my order'));
+await send(await key(c2.id), sec(T2), upd(7001, 1, 'Hana', 'Hi, staff bot here'));
+const wk = await key(w.id);
+const sr = await env.app.inject({ method: 'POST', url: `/api/v1/widget/${wk}/session`, payload: {} }); console.log('SESSION', sr.statusCode, sr.body.slice(0,120)); const tok = sr.json().token;
+const mr = await env.app.inject({ method: 'POST', url: `/api/v1/widget/${wk}/messages`, payload: { token: tok, text: 'Website visitor: do you open on Friday?', clientMsgId: 'client-msg-1' } }); console.log('MSG', mr.statusCode, mr.body.slice(0,200)); console.log('WCH', JSON.stringify(w).slice(0,200));
+for (let i = 0; i < 6; i++) await send(await key(c1.id), sec(T1), upd(6000 + i, 1, ['Mona','Ali','Yara','Khaled','Dina','Tamer'][i], 'Hello, do you have offers?'));
+await send(await key(c1.id), sec(T1), upd(6100, 1, 'Nabil', 'STOP'));
+await env.app.channels.idle();
+await env.owner.query(`UPDATE contacts SET tags = ARRAY['vip'] WHERE name = 'Mona'`);
+env.app.config.appUrl = `http://localhost:${PORT}`;
+env.app.campaigns.intervalSeconds = 2; env.app.campaigns.start();
+await env.app.listen({ port: PORT, host: '127.0.0.1' });
+console.log(JSON.stringify({ ready: true, email: a.email, password: 'Correct-horse-battery-1', widgetKey: wk, c1: c1.id, c2: c2.id }));
+setInterval(() => {}, 1 << 30);

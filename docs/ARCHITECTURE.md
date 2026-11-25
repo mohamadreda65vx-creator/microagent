@@ -223,3 +223,12 @@ Timeout, retry with exponential backoff + jitter (408/409/425/429/5xx/network/ti
 **API (under `/api/v1`).** `/channels` (catalog, CRUD, connect, status/QR, reconnect, disconnect, health-check, contacts, Meta oauth), `/conversations` (summary, list — `platform` required —, detail, messages, read, reply, attachments, status/assign, takeover, release), `/messages/:id/{retry,forward,forward/preview,forwards,attachments/:i}`, public `/webhooks/channel/:key`, `/webhooks/meta`, `/widget.js`, `/widget/:key/*`.
 
 **UI.** `/app/channels`, and one route per platform `/app/inbox/{whatsapp|messenger|instagram|telegram|website}` (three panes: filters+list, thread, customer details).
+
+
+## 22. Part 4 — Customers & AI retargeting
+- **Schema** (migration 0009): `contacts` extended (email, status, consent_*, notes, tags, interests, last_inbound_at, unreachable_*); `customer_events`, `campaign_templates`, `campaigns`, `campaign_recipients` (UNIQUE campaign+contact; composite FK keeps the contact on the campaign's channel), `campaign_events`; RLS by `tenant_id`; the platform-admin role has no grants on these tables. Unique partial index on `messages.meta->>'campaignRecipientId'` blocks double sends.
+- **Eligibility** (`campaigns/audience.ts`, pure `evaluate()`): opted_out, unreachable, no_previous_conversation, outside_messaging_window (24h−10min), marketing_messages_not_supported, no_marketing_consent, template_required, platform_not_supported, channel_not_connected, no_longer_matches. Re-run at send time.
+- **Approval**: sha256 over channel, message, footer, normalized filter and sorted eligible ids; approve needs `confirmRecipients` = eligible count (+ risk ack for WhatsApp QR); edits void it; launch recomputes (mismatch → 409 `audience_changed`).
+- **Engine** (`campaigns/engine.ts`): tick claims recipients with FOR UPDATE SKIP LOCKED, per-platform limits, retry, stuck-recovery, auto-pause, completion; sends through `ChannelManager.sendCampaignMessage`.
+- **AI builder** (`campaigns/builder.ts`): proposal only; validated like untrusted input.
+- **API**: `/customers*`, `/campaigns*`, `/campaign-templates*`. Permissions `customers:read|manage`, `campaigns:read|manage|approve` (approve: owner/admin).

@@ -25,6 +25,9 @@ import { createMailer } from './shared/mailer.js';
 import { AiService } from './ai/service.js';
 import type { LlmProvider } from './ai/types.js';
 import { ChannelManager } from './channels/manager.js';
+import { CampaignEngine } from './campaigns/engine.js';
+import { campaignRoutes } from './modules/campaigns/routes.js';
+import { customerRoutes } from './modules/customers/routes.js';
 import { channelRoutes } from './modules/channels/routes.js';
 import { publicChannelRoutes } from './modules/channels/public.js';
 import { conversationRoutes } from './modules/conversations/routes.js';
@@ -53,7 +56,8 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
   app.decorate('mailer', createMailer(config, pools, app.log));
   app.decorate('ai', new AiService(config, pools, app.log, opts.aiProvider));
   app.decorate('channels', new ChannelManager(app));
-  app.addHook('onClose', async () => { app.channels.stop(); await app.channels.idle(); });
+  app.decorate('campaigns', new CampaignEngine(app));
+  app.addHook('onClose', async () => { app.campaigns.stop(); app.channels.stop(); await app.channels.idle(); });
   if (!opts.pools) app.addHook('onClose', async () => pools.close());
 
   await app.register(helmet, {
@@ -133,6 +137,8 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
       await api.register(simulationRoutes);
       await api.register(channelRoutes);
       await api.register(conversationRoutes);
+      await api.register(customerRoutes);
+      await api.register(campaignRoutes);
       await api.register(publicChannelRoutes);
       await api.register(overviewRoutes);
       await api.register(platformRoutes);

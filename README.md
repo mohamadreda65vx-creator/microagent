@@ -50,7 +50,7 @@ Production-style (single process): `npm run build && npm start` then open http:/
 npm test
 ```
 
-Runs the API integration tests against the `microagent_test` database (168 tests: channels & conversations (Part 3), authentication, RBAC,
+Runs the API integration tests against the `microagent_test` database (235 tests: customers & campaigns (Part 4), channels & conversations (Part 3), authentication, RBAC,
 tenant isolation through the API and directly in PostgreSQL, the AI provider layer, the permissions engine
 and guards, business discovery, Teach & Correct, simulation and the activation gate). Tests use a local
 stand-in for OpenRouter (`apps/api/test/fake-openrouter.ts`); they never call the real service.

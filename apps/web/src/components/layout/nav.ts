@@ -21,8 +21,8 @@ export const NAV: NavItem[] = [
   { to: '/app/ai-employees', label: 'AI Employees', icon: Users, permission: 'ai_employees:read' },
   { to: '/app/channels', label: 'Channels', icon: Radio, permission: 'channels:read' },
   ...PLATFORMS.map((p, i): NavItem => ({ to: `/app/inbox/${p.slug}`, label: p.label, icon: p.icon, permission: 'conversations:read', badge: p.type, group: i === 0 ? 'Conversations' : undefined })),
-  { to: '/app/customers', label: 'Customers', icon: UserSquare2, permission: 'overview:read', planned: true },
-  { to: '/app/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'overview:read', planned: true },
+  { to: '/app/customers', label: 'Customers', icon: UserSquare2, permission: 'customers:read' },
+  { to: '/app/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns:read' },
   { to: '/app/knowledge', label: 'Business Knowledge', icon: BookOpen, permission: 'knowledge:read' },
   { to: '/app/workflows', label: 'Workflow Builder', icon: Workflow, permission: 'overview:read', planned: true },
   { to: '/app/teach', label: 'Teach & Correct', icon: GraduationCap, permission: 'rules:read' },
@@ -34,8 +34,6 @@ export const NAV: NavItem[] = [
 
 export const PLANNED_COPY: Record<string, { title: string; description: string }> = {
   channels: { title: 'Channels', description: 'Connect Messenger, WhatsApp, Instagram and your website chat so your AI employees can reach customers.' },
-  customers: { title: 'Customers', description: 'A profile for every person who talks to your business, with their conversation history and details.' },
-  campaigns: { title: 'Campaigns', description: 'Send planned outreach and follow-ups through your AI employees, and see what works.' },
   knowledge: { title: 'Business Knowledge', description: 'Upload your products, prices, policies and FAQs so your AI employees answer from facts about your business.' },
   workflows: { title: 'Workflow Builder', description: 'Design the steps an AI employee follows and connect it to the tools your team already uses.' },
   teach: { title: 'Teach & Correct', description: 'Review answers, correct mistakes once, and watch your AI employees improve.' },

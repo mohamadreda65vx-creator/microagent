@@ -6,6 +6,7 @@ import type { ChatMessage } from '../ai/types.js';
 import { withTenant } from '../db/tx.js';
 import type { Client } from '../db/pool.js';
 import { AppError, notFound } from '../shared/errors.js';
+import { isOptOut } from '../campaigns/audience.js';
 import { randomKey } from './crypto.js';
 import { ConnectorRegistry } from './registry.js';
 import {
@@ -379,14 +380,24 @@ export class ChannelManager {
       const contact = ct.rows[0];
       await c.query(`INSERT INTO conversations (tenant_id, channel_id, platform, contact_id, employee_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (channel_id, contact_id) DO NOTHING`, [tenantId, ch.id, ch.type, contact.id, ch.employeeId]);
       const cv = (await c.query('SELECT id, handler, status FROM conversations WHERE channel_id = $1 AND contact_id = $2', [ch.id, contact.id])).rows[0];
-      const aiState = cv.handler === 'ai' && ch.employeeId && ch.autoReply ? 'pending' : 'skipped';
+      const optOut = isOptOut(m.text);
+      const aiState = !optOut && cv.handler === 'ai' && ch.employeeId && ch.autoReply ? 'pending' : 'skipped';
       const ins = await c.query(
         `INSERT INTO messages (tenant_id, channel_id, conversation_id, direction, sender_type, external_id, body, attachments, status, ai_state, meta)
          VALUES ($1, $2, $3, 'in', 'customer', $4, $5, $6, 'received', $7, $8)
          ON CONFLICT (channel_id, direction, external_id) WHERE external_id IS NOT NULL DO NOTHING RETURNING id`,
-        [tenantId, ch.id, cv.id, m.externalId, m.text.slice(0, 8000), JSON.stringify(m.attachments), aiState, JSON.stringify({ providerAt: m.at.toISOString() })],
+        [tenantId, ch.id, cv.id, m.externalId, m.text.slice(0, 8000), JSON.stringify(m.attachments), aiState, JSON.stringify({ providerAt: m.at.toISOString(), ...(optOut ? { optOut: true } : {}) })],
       );
       if (!ins.rows[0]) return { duplicate: true as const };
+      // Customer facts (only for a NEW message, so a replayed webhook cannot double-log anything).
+      const prev = (await c.query(`SELECT consent_status, unreachable_at FROM contacts WHERE id = $1`, [contact.id])).rows[0];
+      await c.query(`UPDATE contacts SET last_inbound_at = now(), unreachable_at = NULL, unreachable_reason = NULL WHERE id = $1`, [contact.id]);
+      if (contact.created) await c.query(`INSERT INTO customer_events (tenant_id, channel_id, contact_id, kind) VALUES ($1, $2, $3, 'first_contact')`, [tenantId, ch.id, contact.id]);
+      if (prev.unreachable_at) await c.query(`INSERT INTO customer_events (tenant_id, channel_id, contact_id, kind, detail) VALUES ($1, $2, $3, 'reachable_again', '{}')`, [tenantId, ch.id, contact.id]);
+      if (optOut && prev.consent_status !== 'opted_out') {
+        await c.query(`UPDATE contacts SET consent_status = 'opted_out', consent_source = 'customer_message', consent_at = now(), consent_by = NULL WHERE id = $1`, [contact.id]);
+        await c.query(`INSERT INTO customer_events (tenant_id, channel_id, contact_id, kind, detail) VALUES ($1, $2, $3, 'consent_changed', $4)`, [tenantId, ch.id, contact.id, JSON.stringify({ from: prev.consent_status, to: 'opted_out', source: 'customer_message' })]);
+      }
       await c.query(
         `UPDATE conversations SET last_message_at = now(), last_inbound_at = now(), last_message_preview = $2, unread_count = unread_count + 1,
            status = CASE WHEN status = 'resolved' THEN 'open' ELSE status END WHERE id = $1`,
@@ -519,6 +530,33 @@ export class ChannelManager {
     return this.deliver(tenantId, queued);
   }
 
+  /**
+   * One campaign message to one customer. Lives in the same thread as the conversation (so staff see it) but never touches
+   * handler / unread / AI state. At most ONE message per campaign recipient exists (unique index), so a crash + retry cannot double-send.
+   */
+  async sendCampaignMessage(tenantId: string, o: { campaignId: string; campaignName: string; recipientId: string; contactId: string; channelId: string; text: string }) {
+    const messageId = await this.tx(tenantId, async (c) => {
+      const ch = await this.load(c, o.channelId);
+      const connector = this.registry.get(ch.type, ch.provider);
+      if (o.text.length > connector.capabilities.maxTextLength) throw new AppError(400, 'message_too_long', `This channel accepts messages up to ${connector.capabilities.maxTextLength} characters.`);
+      await c.query(`INSERT INTO conversations (tenant_id, channel_id, platform, contact_id, employee_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (channel_id, contact_id) DO NOTHING`, [tenantId, ch.id, ch.type, o.contactId, ch.employeeId]);
+      const cv = (await c.query('SELECT id FROM conversations WHERE channel_id = $1 AND contact_id = $2', [ch.id, o.contactId])).rows[0];
+      const meta = JSON.stringify({ campaign: { id: o.campaignId, name: o.campaignName }, campaignRecipientId: o.recipientId });
+      const ins = await c.query(
+        `INSERT INTO messages (tenant_id, channel_id, conversation_id, direction, sender_type, body, status, meta) VALUES ($1, $2, $3, 'out', 'system', $4, 'queued', $5)
+         ON CONFLICT ((meta ->> 'campaignRecipientId')) WHERE meta ? 'campaignRecipientId' AND direction = 'out' DO NOTHING RETURNING id`,
+        [tenantId, ch.id, cv.id, o.text, meta],
+      );
+      if (ins.rows[0]) {
+        await c.query(`UPDATE conversations SET last_message_at = now(), last_message_preview = $2 WHERE id = $1`, [cv.id, preview(o.text)]);
+        return ins.rows[0].id as string;
+      }
+      return (await c.query(`SELECT id FROM messages WHERE direction = 'out' AND meta ->> 'campaignRecipientId' = $1`, [o.recipientId])).rows[0].id as string;
+    });
+    const res = await this.deliver(tenantId, messageId);
+    return { messageId, ...res };
+  }
+
   /** Send (or re-send) one queued/retry message. Safe to call twice: only one caller can claim it. */
   async deliver(tenantId: string, messageId: string): Promise<{ id: string; status: string; error?: string | null; errorCode?: string | null }> {
     const claim = await this.tx(tenantId, async (c) => {
@@ -560,6 +598,10 @@ export class ChannelManager {
       const delay = this.retryDelaysSeconds[Math.min(m.attempts - 1, this.retryDelaysSeconds.length - 1)] ?? 1800;
       const channelFault = !RECIPIENT_ERRORS.has(ce.code);
       await this.tx(tenantId, async (c) => {
+        if (ce.code === 'recipient_blocked' || ce.code === 'recipient_not_found') {
+          const ct = await c.query(`UPDATE contacts SET unreachable_at = now(), unreachable_reason = $2 WHERE unreachable_at IS NULL AND id = (SELECT contact_id FROM conversations WHERE id = $1) RETURNING id, channel_id`, [m.conversation_id, ce.code]);
+          if (ct.rows[0]) await c.query(`INSERT INTO customer_events (tenant_id, channel_id, contact_id, kind, detail) VALUES ($1, $2, $3, 'unreachable', $4)`, [tenantId, ct.rows[0].channel_id, ct.rows[0].id, JSON.stringify({ code: ce.code })]);
+        }
         await c.query(
           `UPDATE messages SET status = $2, error = $3, error_code = $4, next_attempt_at = CASE WHEN $2 = 'retry' THEN now() + make_interval(secs => $5) ELSE NULL END WHERE id = $1`,
           [m.id, retry ? 'retry' : 'failed', ce.message.slice(0, 400), ce.code, delay],

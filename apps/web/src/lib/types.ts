@@ -10,6 +10,11 @@ export type Permission =
   | 'conversations:reply'
   | 'conversations:manage'
   | 'conversations:forward'
+  | 'customers:read'
+  | 'customers:manage'
+  | 'campaigns:read'
+  | 'campaigns:manage'
+  | 'campaigns:approve'
   | 'knowledge:read'
   | 'knowledge:write'
   | 'rules:read'
@@ -243,8 +248,44 @@ export interface ChatMessage {
   error: string | null;
   errorCode: string | null;
   attempts: number;
-  meta: { forward?: { fromPlatform: string }; ai?: { blocked?: string[]; error?: string | null } };
+  meta: { campaign?: { id: string; name: string }; forward?: { fromPlatform: string }; ai?: { blocked?: string[]; error?: string | null } };
   createdAt: string;
   forwardCount: number;
 }
 export interface PlatformCounters { total: number; unreadConversations: number; unread: number; needsHuman: number }
+
+// ───────────── Part 4: customers & campaigns ─────────────
+export type CustomerStatus = 'new' | 'lead' | 'customer' | 'inactive';
+export type Consent = 'unknown' | 'opted_in' | 'opted_out';
+export interface Customer {
+  id: string; platform: ChannelType; channelId: string; channelName: string; platformUserId: string | null; name: string | null; phone: string | null; email: string | null;
+  status: CustomerStatus; consentStatus: Consent; consentSource: string | null; consentAt: string | null; notes: string | null; tags: string[]; interests: string[];
+  firstInteractionAt: string; lastInteractionAt: string; unreachableAt: string | null; unreachableReason: string | null; conversationId: string | null;
+  lastMessage: string | null; lastMessageAt: string | null; phoneEditable: boolean;
+}
+export interface CustomerDetail extends Customer {
+  stats: { messages: number; inbound: number; outbound: number };
+  events: Array<{ id: number; kind: string; detail: Record<string, any>; createdAt: string; actorName: string | null }>;
+  campaigns: Array<{ id: string; name: string; status: string; reason: string | null; sentAt: string | null }>;
+}
+export interface AudienceFilter {
+  lastInteraction?: { withinDays?: number; olderThanDays?: number };
+  dateRange?: { field: 'first_interaction' | 'last_interaction'; from?: string; to?: string };
+  tagsAny?: string[]; tagsAll?: string[]; excludeTags?: string[]; statuses?: CustomerStatus[]; purchased?: boolean; interestsAny?: string[];
+  previousCampaign?: { campaignId: string; replied: boolean }; optedInOnly?: boolean;
+}
+export type CampaignStatus = 'draft' | 'approved' | 'scheduled' | 'running' | 'paused' | 'completed' | 'cancelled';
+export type CampaignPlatform = 'whatsapp' | 'messenger' | 'instagram' | 'telegram';
+export interface Campaign {
+  id: string; name: string; channelId: string; channelName?: string; channelStatus?: string; platform: CampaignPlatform; brief: string | null; message: string; optoutFooter: boolean;
+  audience: AudienceFilter; status: CampaignStatus; createdByAi: boolean; aiNotes: { improvements?: string[]; questions?: string[]; warnings?: string[] };
+  ratePerMinute: number | null; effectiveRatePerMinute?: number; dailyCap?: number | null; approvedAt: string | null; approvedEligible: number | null; scheduledAt: string | null;
+  launchedAt: string | null; startedAt: string | null; finishedAt: string | null; snapshot: { total?: number; eligible?: number }; createdAt: string;
+  totalAudience?: number; sent?: number; delivered?: number; failed?: number;
+}
+export interface CampaignPreview {
+  total: number; eligible: number; excluded: Array<{ reason: string; label: string; count: number }>; sample: Array<{ contactId: string; name: string | null; text: string }>;
+  blockers: Array<{ code: string; text: string }>; warnings: string[]; requiresUnofficialAck: boolean; estimatedMinutes: number; ratePerMinute: number; hash: string;
+}
+export interface CampaignCounts { totalAudience: number; eligible: number; queued: number; inFlight: number; skipped: number; cancelled: number; failed: number; sent: number; delivered: number; read: number; replies: number; leads: number; conversions: number; optOuts: number }
+export interface CampaignPlatformInfo { platform: CampaignPlatform; rules: string[]; limits: { perMinute: number; perDay: number | null }; channels: Array<{ id: string; name: string; status: string; unofficial: boolean }> }

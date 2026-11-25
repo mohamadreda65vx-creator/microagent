@@ -1,13 +1,13 @@
 # PROJECT_STATUS — MicroAgent
 
-**Part 1 (Foundation & UI): done.  Part 2 (AI Employees & Intelligence): implemented, tested against a local stand-in AI only.  Part 3 (Channels & Conversations): implemented and tested against LOCAL STAND-INS of Telegram / Evolution API / Meta Graph — no real provider has been reached.  Part 4: NOT started.**
+**Part 1 (Foundation & UI): done.  Part 2 (AI Employees & Intelligence): implemented, tested against a local stand-in AI only.  Part 3 (Channels & Conversations): implemented and tested against LOCAL STAND-INS of Telegram / Evolution API / Meta Graph — no real provider has been reached.  Part 4 (Customers & AI Retargeting): implemented and tested against the same stand-ins and synthetic customers only — no real customer was messaged. Part 5: NOT started.**
 Last verified: 2026-11-23.
 
 ## Verification summary
 
 | Check | Result |
 |---|---|
-| API integration tests (`npm test`) | 168 / 168 pass (Part 3 channels & conversations: 53; policy 19, AI layer 15, knowledge 14, agent runtime 31, platform AI 1, plus Part 1 suites incl. RLS guard) |
+| API integration tests (`npm test`) | 235 / 235 pass (Part 4 customers & campaigns: 67; Part 3 channels & conversations: 53; policy 19, AI layer 15, knowledge 14, agent runtime 31, platform AI 1, plus Part 1 suites incl. RLS guard) |
 | TypeScript typecheck (api + web) | clean |
 | Production build (`npm run build`) | OK |
 | Browser E2E, Part 2 flows (Chromium, against stand-in AI) | 24 checks pass |
@@ -44,6 +44,23 @@ All AI tests use a local stand-in server (`FakeOpenRouter`, tests only). It prov
 - **Security:** credentials AES-256-GCM encrypted (`CHANNEL_SECRET_KEY`), never returned by the API, scrubbed from errors; per-tenant RLS; platform admin has no access to conversations; permissions `channels:*` and `conversations:*`.
 - **AI bridge:** inbound messages go through the Part 2 runtime (policy, guards, approvals); hand-off sets the conversation to "needs a person"; staff reply takes over automatically.
 
+## Part 4 — Customers & AI Retargeting (completed against stand-ins + synthetic data only)
+- **Customers**: each channel contact is a customer (name, platform id, phone/email only if the platform supplied them or staff typed them, first/last interaction, last message, tags, interests, notes, status new/lead/customer/inactive, marketing consent + source, activity timeline). No identity merging across platforms. Page: Customers (filters, bulk tags, detail, consent with required note on re-opt-in).
+- **Campaigns**: one channel per campaign. AI builder turns a sentence into a DRAFT (audience filter validated by whitelist, numbers not in the owner's text flagged, unknown tags dropped). Audience computed by SQL, eligibility by a pure rules function re-run at send time.
+- **Compliance rules enforced**: opted-out and unreachable excluded; Messenger/Instagram only inside the 24h window (Meta Marketing Messages NOT implemented, so older contacts are excluded with a reason); WhatsApp inside window, or outside only for explicit opt-in on the unofficial QR connection with a risk acknowledgement (official Cloud API needs templates: excluded as `template_required`); Telegram needs a started chat; website chat not supported. Excluded counts + reasons shown.
+- **Approval**: owner/admin only, bound to a hash of message+audience+eligible ids, typed recipient count; any edit voids it; launch recomputes and refuses if the audience changed.
+- **Sending engine**: background worker, per-platform rate limits (campaign can only lower), daily cap for WhatsApp, retries, duplicate prevention (DB unique per campaign+customer and per campaign message), pause/resume/cancel, auto-pause when the channel disconnects, scheduling, opt-out footer, STOP/إيقاف handling.
+- **Analytics**: audience, eligible, sent, delivered (only if the channel reports it — Telegram never does), failed, replies (7d), leads/conversions (14d, from staff-set statuses), opt-outs.
+- **Tests**: 67 new API tests (rules, audience selection, excluding ineligible, duplicate prevention, stopping a campaign, recording results, cross-company isolation incl. DB-level and platform-admin denial). Browser E2E (Chromium): Customers list/detail, AI draft with stand-in AI → preview (9 in audience, 8 eligible, 1 opted-out excluded) → typed approval → launch → 8 sent to a stand-in Telegram bot, monitor, mobile 390px with no horizontal scroll. Harness: `apps/api/test/e2e-campaigns.ts` (manual).
+
+## Not completed / known gaps (Part 4)
+- No real provider was called; real Telegram/Meta/WhatsApp behaviour (limits, window rules, errors) is untested.
+- Meta Marketing Messages and WhatsApp official templates/Cloud API sending are not implemented. WhatsApp QR is unofficial (ban risk).
+- Delivery receipts: Telegram none. Leads/conversions depend on staff updating statuses (no orders/purchase integration; "previous purchases" = status customer).
+- No customer export/erasure, no cross-platform identity linking, no "send test to myself", audience cap 10,000, the campaign worker runs inside one API process, scheduled audience is frozen at approval (eligibility re-checked when sending).
+- The Arabic+English opt-out footer renders with mixed text direction on one line (cosmetic).
+- Part 5 not started.
+
 ## Not completed / known gaps (Part 3)
 
 1. **No real provider was ever called.** Telegram, Evolution API and Meta were tested only against local stand-ins that I wrote from the public API docs. Real behaviour (payload variants, rate limits, QR timing) may differ. Test each with a real account before relying on it.
@@ -78,4 +95,4 @@ Not deployed to Hostinger (VPS required); SMTP untested against a real server; n
 See `docs/ARCHITECTURE.md` §10 and §11–20 (Part 2).
 
 ## Next
-Part 4 — **not started**. Before it: test Telegram with a real bot on a public HTTPS server, and (if wanted) an Evolution API server, and the real OpenRouter key.
+Part 5 — **not started**. Before it: test Telegram with a real bot on a public HTTPS server, and (if wanted) an Evolution API server, and the real OpenRouter key.

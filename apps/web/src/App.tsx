@@ -8,6 +8,8 @@ import Companies from './pages/admin/Companies';
 import AiEmployees from './pages/app/AiEmployees';
 import EmployeeEditor from './pages/app/EmployeeEditor';
 import Inbox from './pages/app/Inbox';
+import Customers from './pages/app/Customers';
+import Campaigns from './pages/app/Campaigns';
 import Channels from './pages/app/Channels';
 import Activity from './pages/app/Activity';
 import Knowledge from './pages/app/Knowledge';
@@ -53,6 +55,8 @@ export default function App() {
           <Route path="activity" element={<RequirePermission permission="approvals:read"><Activity /></RequirePermission>} />
           <Route path="channels" element={<RequirePermission permission="channels:read"><Channels /></RequirePermission>} />
           <Route path="inbox/:platform" element={<RequirePermission permission="conversations:read"><Inbox /></RequirePermission>} />
+          <Route path="customers" element={<RequirePermission permission="customers:read"><Customers /></RequirePermission>} />
+          <Route path="campaigns/*" element={<RequirePermission permission="campaigns:read"><Campaigns /></RequirePermission>} />
           <Route path="conversations" element={<Navigate to="/app/inbox/whatsapp" replace />} />
           <Route path="workflows" element={<Workflows />} />
           {NAV.filter((n) => n.planned && !['/app/conversations', '/app/workflows'].includes(n.to)).map((n) => (
