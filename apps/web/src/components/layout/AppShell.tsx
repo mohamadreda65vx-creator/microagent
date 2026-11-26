@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronDown, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings, ShieldCheck, X } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import clsx from 'clsx';
@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import type { PlatformCounters } from '../../lib/types';
 import { NAV } from './nav';
+import { NotificationBell } from './Bell';
 
 const roleLabel: Record<string, string> = { platform_admin: 'Platform admin', owner: 'Owner', admin: 'Admin', manager: 'Manager', viewer: 'Viewer' };
 
@@ -30,9 +31,14 @@ function SidebarLinks({ onNavigate, collapsed }: { onNavigate?: () => void; coll
   return (
     <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4" aria-label="Main">
       {me?.user.role === 'platform_admin' ? (
-        <NavLink to="/admin" end onClick={onNavigate} title={collapsed ? 'Companies' : undefined} aria-label="Companies" className={({ isActive }) => linkCls(isActive, collapsed)}>
-          <ShieldCheck className="size-[18px]" strokeWidth={1.8} /> {collapsed ? null : 'Companies'}
-        </NavLink>
+        <>
+          <NavLink to="/admin" end onClick={onNavigate} title={collapsed ? 'Platform dashboard' : undefined} aria-label="Platform dashboard" className={({ isActive }) => linkCls(isActive, collapsed)}>
+            <LayoutDashboard className="size-[18px]" strokeWidth={1.8} /> {collapsed ? null : 'Dashboard'}
+          </NavLink>
+          <NavLink to="/admin/companies" onClick={onNavigate} title={collapsed ? 'Companies' : undefined} aria-label="Companies" className={({ isActive }) => linkCls(isActive, collapsed)}>
+            <ShieldCheck className="size-[18px]" strokeWidth={1.8} /> {collapsed ? null : 'Companies'}
+          </NavLink>
+        </>
       ) : null}
       {items.map((n) => (
         <div key={n.to}>
@@ -178,7 +184,7 @@ export function AppShell({ banner }: { banner?: ReactNode }) {
   const { pathname } = useLocation();
   const { me } = useAuth();
   const current = NAV.find((n) => (n.end ? pathname === n.to : pathname.startsWith(n.to)));
-  const title = me?.user.role === 'platform_admin' ? 'Companies' : (current?.label ?? 'Dashboard');
+  const title = me?.user.role === 'platform_admin' ? (pathname.startsWith('/admin/companies') ? 'Companies' : 'Platform dashboard') : (current?.label ?? 'Dashboard');
 
   useEffect(() => setDrawer(false), [pathname]);
 
@@ -209,12 +215,13 @@ export function AppShell({ banner }: { banner?: ReactNode }) {
           </button>
           <h1 className="font-display text-lg font-semibold text-mist-900">{title}</h1>
           {me?.user.role === 'platform_admin' ? <Badge tone="burgundy">Platform</Badge> : null}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            {me?.user.role !== 'platform_admin' ? <NotificationBell /> : null}
             <UserMenu />
           </div>
         </header>
         {banner}
-        <main className="mx-auto max-w-6xl px-4 py-7 sm:px-6">
+        <main className={/^\/app\/workflows\/[0-9a-f-]{36}/.test(pathname) ? '' : 'mx-auto max-w-6xl px-4 py-7 sm:px-6'}>
           <Outlet />
         </main>
       </div>

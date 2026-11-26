@@ -19,6 +19,8 @@ import Planned from './pages/app/Planned';
 import Settings from './pages/app/Settings';
 import Team from './pages/app/Team';
 import Workflows from './pages/app/Workflows';
+import AdminDashboard from './pages/admin/Dashboard';
+import Performance from './pages/app/Performance';
 
 function NotFound() {
   return (
@@ -58,7 +60,8 @@ export default function App() {
           <Route path="customers" element={<RequirePermission permission="customers:read"><Customers /></RequirePermission>} />
           <Route path="campaigns/*" element={<RequirePermission permission="campaigns:read"><Campaigns /></RequirePermission>} />
           <Route path="conversations" element={<Navigate to="/app/inbox/whatsapp" replace />} />
-          <Route path="workflows" element={<Workflows />} />
+          <Route path="workflows/*" element={<RequirePermission permission="workflows:read"><Workflows /></RequirePermission>} />
+          <Route path="performance" element={<RequirePermission permission="overview:read"><Performance /></RequirePermission>} />
           {NAV.filter((n) => n.planned && !['/app/conversations', '/app/workflows'].includes(n.to)).map((n) => (
             <Route key={n.to} path={n.to.replace('/app/', '')} element={<Planned />} />
           ))}
@@ -69,7 +72,8 @@ export default function App() {
       {/* Platform admin */}
       <Route element={<RequireAuth roles="platform" />}>
         <Route path="/admin" element={<AppShell />}>
-          <Route index element={<Companies />} />
+          <Route index element={<AdminDashboard />} />
+          <Route path="companies" element={<Companies />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Route>
       </Route>

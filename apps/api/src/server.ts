@@ -13,6 +13,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 
 app.channels.start();
 app.campaigns.start();
+app.workflows.start();
 
 try {
   await app.listen({ host: config.host, port: config.port });

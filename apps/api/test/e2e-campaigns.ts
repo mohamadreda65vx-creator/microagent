@@ -32,7 +32,7 @@ await send(await key(c2.id), sec(T2), upd(7001, 1, 'Hana', 'Hi, staff bot here')
 const wk = await key(w.id);
 const sr = await env.app.inject({ method: 'POST', url: `/api/v1/widget/${wk}/session`, payload: {} }); console.log('SESSION', sr.statusCode, sr.body.slice(0,120)); const tok = sr.json().token;
 const mr = await env.app.inject({ method: 'POST', url: `/api/v1/widget/${wk}/messages`, payload: { token: tok, text: 'Website visitor: do you open on Friday?', clientMsgId: 'client-msg-1' } }); console.log('MSG', mr.statusCode, mr.body.slice(0,200)); console.log('WCH', JSON.stringify(w).slice(0,200));
-for (let i = 0; i < 6; i++) await send(await key(c1.id), sec(T1), upd(6000 + i, 1, ['Mona','Ali','Yara','Khaled','Dina','Tamer'][i], 'Hello, do you have offers?'));
+for (let i = 0; i < 6; i++) await send(await key(c1.id), sec(T1), upd(6000 + i, 1, ['Mona','Ali','Yara','Khaled','Dina','Tamer'][i]!, 'Hello, do you have offers?'));
 await send(await key(c1.id), sec(T1), upd(6100, 1, 'Nabil', 'STOP'));
 await env.app.channels.idle();
 await env.owner.query(`UPDATE contacts SET tags = ARRAY['vip'] WHERE name = 'Mona'`);

@@ -10,6 +10,7 @@
  */
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { limitsFor, usageOf } from '../shared/limits.js';
 import { audit } from '../agent/employee.js';
 import type { ChannelRecord } from '../channels/manager.js';
 import { withTenant } from '../db/tx.js';
@@ -107,6 +108,10 @@ export class CampaignEngine {
     if (!camp.message.trim()) blockers.push({ code: 'empty_message', text: 'Write the message first.' });
     const sampleText = renderMessage(camp.message, 'Sample', camp.optoutFooter);
     if (sampleText.length > connector.capabilities.maxTextLength) blockers.push({ code: 'message_too_long', text: `The message (with the opt-out line) is longer than ${connector.capabilities.maxTextLength} characters.` });
+    {
+      const used = await usageOf(c, 'maxMonthlyMessages'), lim = (await limitsFor(c)).maxMonthlyMessages;
+      if (eligible.length > 0 && used + eligible.length > lim) blockers.push({ code: 'plan_message_limit', text: `Your plan allows ${lim} messages a month and ${used} are already used. This campaign needs ${eligible.length} more. Ask the platform admin to raise the limit.` });
+    }
     if (eligible.length === 0 && ch.status === 'connected') blockers.push({ code: 'no_eligible_recipients', text: 'Nobody in this audience can be messaged right now.' });
     const unofficial = ch.type === 'whatsapp' && ch.provider === 'evolution';
     if (unofficial) warnings.push('WhatsApp through QR is unofficial. WhatsApp can restrict or ban a number that sends bulk messages. Sending is slow and capped per day on purpose.');

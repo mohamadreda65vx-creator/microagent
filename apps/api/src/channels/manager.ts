@@ -415,6 +415,7 @@ export class ChannelManager {
     if (res.duplicate) return { duplicate: true };
     if (res.needsProfile) void this.track(this.fetchProfile(tenantId, ch, res.contactId, m.contactExternalId));
     if (res.aiPending) this.enqueueAi(tenantId, res.conversationId);
+    if (!isOptOut(m.text)) this.app.workflows.fire(tenantId, 'message_received', { platform: ch.type, conversationId: res.conversationId, contactId: res.contactId, channelId: ch.id, text: m.text, dedupe: `msg:${res.messageId}` });
     return { duplicate: false, conversationId: res.conversationId, messageId: res.messageId };
   }
 
@@ -493,6 +494,10 @@ export class ChannelManager {
       }
       return m.rows[0].id as string;
     });
+    if (result.handoff) {
+      const hc = await this.tx(tenantId, async (c) => (await c.query(`SELECT cv.platform, cv.contact_id AS "contactId", cv.channel_id AS "channelId", cv.handoff_at AS "at" FROM conversations cv WHERE cv.id = $1`, [conversationId])).rows[0]);
+      if (hc) this.app.workflows.fire(tenantId, 'conversation_handoff', { platform: hc.platform, conversationId, contactId: hc.contactId, channelId: hc.channelId, reason: result.handoff.reason, dedupe: `handoff:${conversationId}:${new Date(hc.at).getTime()}` });
+    }
     await this.deliver(tenantId, messageId);
   }
 

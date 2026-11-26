@@ -4,7 +4,7 @@ import type { Pools } from '../db/pool.js';
 import { OpenRouterProvider } from './openrouter.js';
 import { AiError, type LlmProvider, type LlmRequest, type LlmResult, type ModelInfo } from './types.js';
 
-export type AiPurpose = 'agent_reply' | 'simulation' | 'extraction' | 'classification' | 'campaign_builder';
+export type AiPurpose = 'agent_reply' | 'simulation' | 'extraction' | 'classification' | 'campaign_builder' | 'workflow';
 
 export interface AiCallContext {
   tenantId: string;

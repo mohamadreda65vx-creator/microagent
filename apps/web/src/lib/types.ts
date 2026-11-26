@@ -15,6 +15,10 @@ export type Permission =
   | 'campaigns:read'
   | 'campaigns:manage'
   | 'campaigns:approve'
+  | 'workflows:read'
+  | 'workflows:manage'
+  | 'workflows:publish'
+  | 'workflows:tasks'
   | 'knowledge:read'
   | 'knowledge:write'
   | 'rules:read'
@@ -289,3 +293,14 @@ export interface CampaignPreview {
 }
 export interface CampaignCounts { totalAudience: number; eligible: number; queued: number; inFlight: number; skipped: number; cancelled: number; failed: number; sent: number; delivered: number; read: number; replies: number; leads: number; conversions: number; optOuts: number }
 export interface CampaignPlatformInfo { platform: CampaignPlatform; rules: string[]; limits: { perMinute: number; perDay: number | null }; channels: Array<{ id: string; name: string; status: string; unofficial: boolean }> }
+
+/* ───────── Part 5: workflows, performance, platform dashboard ───────── */
+export type WfNodeType = 'trigger' | 'ai_agent' | 'action' | 'condition' | 'delay' | 'notification' | 'human_task' | 'loop' | 'subprocess';
+export interface WfGraph { nodes: Array<{ id: string; type: WfNodeType; position: { x: number; y: number }; data: Record<string, any> }>; edges: Array<{ id: string; source: string; target: string; sourceHandle?: string | null }> }
+export interface WfIssue { level: 'error' | 'warning'; nodeId?: string; code: string; message: string }
+export interface WfSummary { id: string; name: string; description: string; status: 'draft' | 'active' | 'paused'; activeVersionId: string | null; latestVersion: number; updatedAt: string; liveRuns: number; failedRuns: number; lastRunAt: string | null }
+export interface WfDetail extends Omit<WfSummary, 'liveRuns' | 'failedRuns' | 'lastRunAt'> { graph: WfGraph; issues: WfIssue[]; versions: Array<{ version: number; note: string; createdAt: string; createdByName: string | null; active: boolean }> }
+export interface WfRun { id: string; mode: 'test' | 'live'; status: 'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled'; triggerKind: string; stepCount: number; error: string | null; startedAt: string | null; finishedAt: string | null; createdAt: string; waitKind?: string | null; resumeAt?: string | null; vars?: Record<string, unknown>; triggerSummary?: { platform: string | null; text: string | null } }
+export interface WfStep { seq: number; nodeId: string; nodeType: WfNodeType; status: 'ok' | 'error' | 'skipped' | 'waiting'; dryRun: boolean; input: Record<string, any>; output: Record<string, any>; error: string | null; startedAt: string }
+export interface WfTask { id: string; title: string; instructions: string; assigneeRole: string; status: string; outcome: string | null; note: string | null; dueAt: string | null; createdAt: string; workflowName: string; runId: string }
+export interface AppNotification { id: string; title: string; body: string; link: string | null; readAt: string | null; createdAt: string }

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { enforceLimit } from '../../shared/limits.js';
 import type { Client } from '../../db/pool.js';
 import { ACTIONS, ACTION_TYPES, CHANNELS, DIALECTS, LANGUAGES, TASKS, TASK_INFO, permissionsSchema, resolvePermissions } from '../../agent/catalog.js';
 import { EMPLOYEE_COLUMNS, audit, behaviourSnapshot, configFingerprint, loadEmployee, type EmployeeProfile } from '../../agent/employee.js';
@@ -105,6 +106,7 @@ export async function aiEmployeeRoutes(app: FastifyInstance): Promise<void> {
     if (Object.keys(body.permissions).length > 0 && !can(req.auth!.role, 'ai_permissions:manage')) throw forbidden('Only an owner or admin can set what an employee is allowed to do');
     if (body.model) app.ai.assertModelAllowed(body.model);
     const row = await app.tenantTx(req, async (c) => {
+      await enforceLimit(c, req.auth!.tenantId!, 'maxAiEmployees');
       const { rows } = await c.query(
         `INSERT INTO ai_employees (tenant_id, name, job_title, description, personality, avatar, language, dialect, tasks, knowledge_mode, permissions, channels, model, status, created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft',$14) RETURNING ${EMPLOYEE_COLUMNS}`,

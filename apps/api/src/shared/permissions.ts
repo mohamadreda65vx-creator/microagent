@@ -45,6 +45,13 @@ export const PERMISSIONS = [
   'campaigns:manage',
   /** Approve and launch a campaign: a message to many people. Higher bar on purpose. */
   'campaigns:approve',
+  'workflows:read',
+  /** Create, edit, test and pause workflows; cancel runs. */
+  'workflows:manage',
+  /** Activate a workflow so it runs on real customers. Higher bar on purpose. */
+  'workflows:publish',
+  /** Answer human-task approvals raised by workflows. */
+  'workflows:tasks',
   'team:read',
   'team:manage',
   'settings:read',
@@ -77,6 +84,10 @@ const tenantAll: Permission[] = [
   'campaigns:read',
   'campaigns:manage',
   'campaigns:approve',
+  'workflows:read',
+  'workflows:manage',
+  'workflows:publish',
+  'workflows:tasks',
   'team:read',
   'team:manage',
   'settings:read',
@@ -87,8 +98,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   platform_admin: ['platform:manage'],
   owner: tenantAll,
   admin: tenantAll,
-  manager: ['overview:read', 'ai_employees:read', 'ai_employees:write', 'knowledge:read', 'knowledge:write', 'rules:read', 'rules:write', 'simulation:run', 'approvals:read', 'approvals:decide', 'channels:read', 'conversations:read', 'conversations:reply', 'conversations:manage', 'conversations:forward', 'customers:read', 'customers:manage', 'campaigns:read', 'campaigns:manage', 'team:read', 'settings:read'],
-  viewer: ['overview:read', 'ai_employees:read', 'knowledge:read', 'rules:read', 'approvals:read', 'channels:read', 'conversations:read', 'customers:read', 'campaigns:read', 'team:read', 'settings:read'],
+  manager: ['overview:read', 'ai_employees:read', 'ai_employees:write', 'knowledge:read', 'knowledge:write', 'rules:read', 'rules:write', 'simulation:run', 'approvals:read', 'approvals:decide', 'channels:read', 'conversations:read', 'conversations:reply', 'conversations:manage', 'conversations:forward', 'customers:read', 'customers:manage', 'campaigns:read', 'campaigns:manage', 'workflows:read', 'workflows:manage', 'workflows:tasks', 'team:read', 'settings:read'],
+  viewer: ['overview:read', 'ai_employees:read', 'knowledge:read', 'rules:read', 'approvals:read', 'channels:read', 'conversations:read', 'customers:read', 'campaigns:read', 'workflows:read', 'team:read', 'settings:read'],
 };
 
 export function can(role: Role, permission: Permission): boolean {

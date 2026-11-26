@@ -26,6 +26,10 @@ import { AiService } from './ai/service.js';
 import type { LlmProvider } from './ai/types.js';
 import { ChannelManager } from './channels/manager.js';
 import { CampaignEngine } from './campaigns/engine.js';
+import { WorkflowEngine } from './workflows/engine.js';
+import { workflowRoutes } from './modules/workflows/routes.js';
+import { performanceRoutes } from './modules/performance/routes.js';
+import { platformDashboardRoutes } from './modules/platform/dashboard.js';
 import { campaignRoutes } from './modules/campaigns/routes.js';
 import { customerRoutes } from './modules/customers/routes.js';
 import { channelRoutes } from './modules/channels/routes.js';
@@ -57,7 +61,8 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
   app.decorate('ai', new AiService(config, pools, app.log, opts.aiProvider));
   app.decorate('channels', new ChannelManager(app));
   app.decorate('campaigns', new CampaignEngine(app));
-  app.addHook('onClose', async () => { app.campaigns.stop(); app.channels.stop(); await app.channels.idle(); });
+  app.decorate('workflows', new WorkflowEngine(app));
+  app.addHook('onClose', async () => { app.campaigns.stop(); app.workflows.stop(); app.channels.stop(); await app.channels.idle(); await app.workflows.idle(); });
   if (!opts.pools) app.addHook('onClose', async () => pools.close());
 
   await app.register(helmet, {
@@ -113,6 +118,10 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
       return reply.status(status).send({ error: { code: (err as FastifyError).code ?? 'bad_request', message: err.message } });
     }
     req.log.error({ err }, 'unhandled error');
+    if (process.env.DEBUG_ERRORS) console.error(err);
+    // Platform error log: route + error type only (no request data, no secrets), best effort.
+    void app.pools.app.query(`INSERT INTO system_errors (tenant_id, source, code, message) VALUES ($1, 'api', $2, $3)`,
+      [req.auth?.tenantId ?? null, String((err as { code?: string }).code ?? err.name ?? 'error').slice(0, 80), `${req.method} ${(req.routeOptions?.url ?? 'unknown').slice(0, 200)}`]).catch(() => undefined);
     return reply.status(500).send({ error: { code: 'internal_error', message: 'Something went wrong' } });
   });
 
@@ -139,6 +148,9 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
       await api.register(conversationRoutes);
       await api.register(customerRoutes);
       await api.register(campaignRoutes);
+      await api.register(workflowRoutes);
+      await api.register(performanceRoutes);
+      await api.register(platformDashboardRoutes);
       await api.register(publicChannelRoutes);
       await api.register(overviewRoutes);
       await api.register(platformRoutes);

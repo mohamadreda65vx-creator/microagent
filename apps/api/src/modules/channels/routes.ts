@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { enforceLimit } from '../../shared/limits.js';
 import { audit } from '../../agent/employee.js';
 import { PLATFORM_LABEL, type ChannelManager, type ChannelRecord } from '../../channels/manager.js';
 import { DEFAULT_PROVIDER } from '../../channels/registry.js';
@@ -88,6 +89,7 @@ export async function channelRoutes(app: FastifyInstance): Promise<void> {
   app.post('/channels', { preHandler: manage }, async (req, reply) => {
     const body = z.object({ type: z.enum(CHANNEL_TYPES), name: z.string().trim().min(1).max(80), employeeId: z.uuid().nullish(), autoReply: z.boolean().optional(), config: websiteConfig.optional() }).parse(req.body);
     const a = req.auth!;
+    await app.tenantTx(req, (c) => enforceLimit(c, a.tenantId!, 'maxChannels'));
     const ch = await guard(() => m.create(a.tenantId!, a.userId, { ...body, config: body.type === 'website' ? body.config : undefined }));
     // The website widget needs no external account: it is ready immediately.
     if (ch.type === 'website') await guard(() => m.connect(a.tenantId!, a.userId, ch.id, {}));

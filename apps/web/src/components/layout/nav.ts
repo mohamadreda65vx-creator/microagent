@@ -24,10 +24,10 @@ export const NAV: NavItem[] = [
   { to: '/app/customers', label: 'Customers', icon: UserSquare2, permission: 'customers:read' },
   { to: '/app/campaigns', label: 'Campaigns', icon: Megaphone, permission: 'campaigns:read' },
   { to: '/app/knowledge', label: 'Business Knowledge', icon: BookOpen, permission: 'knowledge:read' },
-  { to: '/app/workflows', label: 'Workflow Builder', icon: Workflow, permission: 'overview:read', planned: true },
+  { to: '/app/workflows', label: 'Workflow Builder', icon: Workflow, permission: 'workflows:read' },
   { to: '/app/teach', label: 'Teach & Correct', icon: GraduationCap, permission: 'rules:read' },
   { to: '/app/activity', label: 'Approvals & Audit', icon: ShieldCheck, permission: 'approvals:read' },
-  { to: '/app/performance', label: 'Performance', icon: BarChart3, permission: 'overview:read', planned: true },
+  { to: '/app/performance', label: 'Performance', icon: BarChart3, permission: 'overview:read' },
   { to: '/app/team', label: 'Team', icon: UsersRound, permission: 'team:read' },
   { to: '/app/settings', label: 'Settings', icon: Settings, permission: 'settings:read' },
 ];

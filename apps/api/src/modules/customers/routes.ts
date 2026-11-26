@@ -91,7 +91,8 @@ export async function customerRoutes(app: FastifyInstance): Promise<void> {
       phone: z.string().trim().regex(/^\+?[0-9 ()-]{5,30}$/, 'Enter a valid phone number').nullable().optional(),
       status: z.enum(CUSTOMER_STATUSES).optional(), notes: z.string().max(4000).nullable().optional(), tags: tagList.optional(), interests: tagList.optional(),
     }).strict().parse(req.body);
-    return app.tenantTx(req, async (c) => {
+    const box: { v: { platform: string; conversationId: string | null; contactId: string; channelId: string; from: string; to: string } | null } = { v: null };
+    const result = await app.tenantTx(req, async (c) => {
       const ct = await load(c, id);
       const sets: string[] = [], p: unknown[] = [id];
       const set = (col: string, v: unknown) => { p.push(v); sets.push(`${col} = $${p.length}`); };
@@ -110,7 +111,11 @@ export async function customerRoutes(app: FastifyInstance): Promise<void> {
       try { await c.query(`UPDATE contacts SET ${sets.join(', ')} WHERE id = $1`, p); }
       catch (e) { if ((e as { code?: string }).code === '23514') throw new AppError(400, 'too_many_tags', 'A customer can have at most 30 tags or interests.'); throw e; }
       const who = req.auth!.userId;
-      if (b.status && b.status !== ct.status) await event(c, req.auth!.tenantId!, ct as any, 'status_changed', { from: ct.status, to: b.status }, who);
+      if (b.status && b.status !== ct.status) {
+        await event(c, req.auth!.tenantId!, ct as any, 'status_changed', { from: ct.status, to: b.status }, who);
+        const cv = (await c.query(`SELECT id, platform FROM conversations WHERE contact_id = $1`, [id])).rows[0];
+        box.v = { platform: cv?.platform ?? (ct as any).platform, conversationId: cv?.id ?? null, contactId: id, channelId: (ct as any).channelId, from: ct.status, to: b.status };
+      }
       if (b.tags) {
         for (const t of b.tags.filter((x) => !ct.tags.includes(x))) await event(c, req.auth!.tenantId!, ct as any, 'tag_added', { tag: t }, who);
         for (const t of (ct.tags as string[]).filter((x) => !b.tags!.includes(x))) await event(c, req.auth!.tenantId!, ct as any, 'tag_removed', { tag: t }, who);
@@ -118,6 +123,9 @@ export async function customerRoutes(app: FastifyInstance): Promise<void> {
       if (changed.length) await event(c, req.auth!.tenantId!, ct as any, 'details_updated', { fields: changed }, who);
       return shape(await load(c, id));
     });
+    const ev = box.v;
+    if (ev) app.workflows.fire(req.auth!.tenantId!, 'customer_status_changed', { platform: ev.platform, conversationId: ev.conversationId, contactId: ev.contactId, channelId: ev.channelId, fromStatus: ev.from, toStatus: ev.to, dedupe: `status:${ev.contactId}:${ev.to}:${Date.now()}` });
+    return result;
   });
 
   app.post('/customers/:id/consent', { preHandler: manage }, async (req) => {
