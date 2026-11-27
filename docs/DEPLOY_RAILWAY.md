@@ -19,3 +19,5 @@ Variables on the `microagent` service (no secrets in git — set them in Railway
 Start command runs: bootstrap roles -> migrations -> server. All steps are idempotent.
 Create the platform admin once: `ADMIN_PASSWORD=... npm run admin:create -- you@example.com "Name"` (needs dev deps, run via `railway run`/shell).
 Move to a Hostinger VPS later with `DEPLOYMENT_GUIDE.md`.
+
+Live (temporary): https://microagent-app-production.up.railway.app
