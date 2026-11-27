@@ -232,3 +232,12 @@ Timeout, retry with exponential backoff + jitter (408/409/425/429/5xx/network/ti
 - **Engine** (`campaigns/engine.ts`): tick claims recipients with FOR UPDATE SKIP LOCKED, per-platform limits, retry, stuck-recovery, auto-pause, completion; sends through `ChannelManager.sendCampaignMessage`.
 - **AI builder** (`campaigns/builder.ts`): proposal only; validated like untrusted input.
 - **API**: `/customers*`, `/campaigns*`, `/campaign-templates*`. Permissions `customers:read|manage`, `campaigns:read|manage|approve` (approve: owner/admin).
+
+## 23. Part 5 — Workflows, performance, super admin
+- **Workflow model** (`workflows`, immutable `workflow_versions`, `workflow_runs`, `workflow_steps`, `workflow_tasks`, `notifications`; all RLS). Graph JSON `{nodes:[{id,type,position,data}], edges:[{id,source,target,sourceHandle}]}`; handles: `out`, condition `true|false`, human task `approved|rejected|timeout`, loop `body|done`. Validation (`src/workflows/graph.ts`) is shared by save, activate and the builder.
+- **Engine** (`src/workflows/engine.ts`): runs are rows; a worker (`worker_workflows_due`, `FOR UPDATE SKIP LOCKED`) picks queued/due runs every 10 s, so delays, human tasks and sub-workflows survive restarts. Step keys are unique per (run, node, visit) and sends are keyed in `messages.meta.workflowStepKey` (unique index) ⇒ at-most-once effects. Test runs are dry. Templates are `{{dot.path}}` lookups and conditions are evaluated by a small safe evaluator (no `eval`).
+- **Triggers** come from the channel manager (message received, handoff) and the customers API (status change) through `app.workflows.fire`. Workflow actions never fire triggers.
+- **Performance API** (`/performance`) computes every KPI from recorded events with the exact definition returned to the UI.
+- **Platform dashboard**: the platform DB role reads only SECURITY DEFINER aggregate functions (`platform_channel_stats`, `platform_message_volume`, `platform_tenant_counts`, `platform_failure_counts`); no direct table access to company content. Subscription state lives on `tenants` (`plan`, `subscription_status`, `trial_ends_at`, `limits` overrides); defaults in `src/shared/plans.ts`; enforcement in `src/shared/limits.ts`.
+- **Security hardening**: global per-session rate limit, `system_errors` log with RLS (migration 0012), route inventory (`app.routeTable`) used by `test/security.test.ts`.
+- **Production**: one Node process serves API + web; PostgreSQL only (no Redis); see `DEPLOYMENT_GUIDE.md`.

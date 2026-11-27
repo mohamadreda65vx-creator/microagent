@@ -37,7 +37,7 @@ export async function publicChannelRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Meta: GET = one-time verification of the callback URL; POST = events for every connected page.
-  app.get('/webhooks/meta', async (req, reply) => {
+  app.get('/webhooks/meta', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
     const q = req.query as Record<string, string | undefined>;
     let token: string | undefined;
     try { token = m.registry.meta.need().verifyToken; } catch { return reply.status(503).send({ error: { code: 'provider_not_configured', message: 'Meta is not configured' } }); }
@@ -50,7 +50,7 @@ export async function publicChannelRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ───────────── website widget ─────────────
-  app.get('/widget.js', async (_req, reply) => reply.header('Content-Type', 'application/javascript; charset=utf-8').header('Cache-Control', 'public, max-age=300').header('Cross-Origin-Resource-Policy', 'cross-origin').send(WIDGET_SCRIPT));
+  app.get('/widget.js', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (_req, reply) => reply.header('Content-Type', 'application/javascript; charset=utf-8').header('Cache-Control', 'public, max-age=300').header('Cross-Origin-Resource-Policy', 'cross-origin').send(WIDGET_SCRIPT));
 
   const loadWidget = async (key: string): Promise<ChannelRecord | null> => {
     const { rows } = await app.pools.app.query('SELECT * FROM channel_resolve($1)', [key]);

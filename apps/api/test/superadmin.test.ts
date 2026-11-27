@@ -23,7 +23,7 @@ describe('Super Admin dashboard, subscriptions and limits', () => {
   before(async () => {
     env = await createTestEnv();
     admin = await createPlatformAdmin(env);
-    a = await signupTenant(env, 'Alpha Cafe'); b = await signupTenant(env, 'Beta Shop');
+    a = await signupTenant(env, 'Alpha Cafe', { plan: 'trial' }); b = await signupTenant(env, 'Beta Shop', { plan: 'trial' });
   });
   after(async () => { await env.close(); });
 

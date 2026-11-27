@@ -1,0 +1,22 @@
+# /etc/systemd/system/microagent.service   (alternative to pm2; use ONE of the two)
+[Unit]
+Description=MicroAgent API (serves the web app too)
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=microagent
+WorkingDirectory=/opt/microagent/apps/api
+EnvironmentFile=/opt/microagent/.env
+ExecStart=/usr/bin/node dist/server.js
+Restart=always
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

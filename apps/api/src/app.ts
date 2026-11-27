@@ -18,7 +18,7 @@ import { overviewRoutes } from './modules/overview/routes.js';
 import { platformRoutes } from './modules/platform/routes.js';
 import { teamRoutes } from './modules/team/routes.js';
 import { tenantRoutes } from './modules/tenants/routes.js';
-import { registerAuth } from './plugins/auth.js';
+import { registerAuth, SESSION_COOKIE } from './plugins/auth.js';
 import { registerUsageMetering } from './plugins/usage.js';
 import { AppError, forbidden } from './shared/errors.js';
 import { createMailer } from './shared/mailer.js';
@@ -83,9 +83,21 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
       },
     },
   });
+  // Route inventory (method + URL + whether a rate limit is declared) — used by the security tests to prove every route is protected.
+  const routeTable: Array<{ method: string; url: string; rateLimited: boolean }> = [];
+  app.addHook('onRoute', (r) => { for (const m of [r.method].flat()) routeTable.push({ method: String(m), url: r.url, rateLimited: Boolean((r.config as { rateLimit?: unknown } | undefined)?.rateLimit) }); });
+  app.decorate('routeTable', routeTable);
   await app.register(cookie);
   // Routes declare `config.rateLimit`; without the plugin registered those settings are simply inert.
-  if (opts.rateLimit !== false) await app.register(rateLimit, { global: false });
+  if (opts.rateLimit !== false) {
+    // Global ceiling for the signed-in API (600 requests/min per session, or per IP when there is no session). Routes that declare their own
+    // limit (login, webhooks, widget…) use that instead. Static files and the health check are not limited.
+    await app.register(rateLimit, {
+      global: true, max: 600, timeWindow: '1 minute',
+      allowList: (req) => !req.url.startsWith('/api/') || req.url === '/api/v1/health',
+      keyGenerator: (req) => { const c = req.cookies?.[SESSION_COOKIE]; return c ? `s:${c.slice(0, 16)}` : `ip:${req.ip}`; },
+    });
+  }
 
   // CSRF defence in depth (cookie is SameSite=Lax): reject state-changing requests from other origins.
   const allowedOrigin = new URL(config.appUrl).origin;
@@ -120,7 +132,7 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
     req.log.error({ err }, 'unhandled error');
     if (process.env.DEBUG_ERRORS) console.error(err);
     // Platform error log: route + error type only (no request data, no secrets), best effort.
-    void app.pools.app.query(`INSERT INTO system_errors (tenant_id, source, code, message) VALUES ($1, 'api', $2, $3)`,
+    void app.pools.platform.query(`INSERT INTO system_errors (tenant_id, source, code, message) VALUES ($1, 'api', $2, $3)`,
       [req.auth?.tenantId ?? null, String((err as { code?: string }).code ?? err.name ?? 'error').slice(0, 80), `${req.method} ${(req.routeOptions?.url ?? 'unknown').slice(0, 200)}`]).catch(() => undefined);
     return reply.status(500).send({ error: { code: 'internal_error', message: 'Something went wrong' } });
   });
@@ -171,8 +183,10 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
       },
     });
   }
+  // "/" is a directory for the static plugin (it answers 403), so the app shell is served explicitly.
+  if (hasWeb) app.get('/', async (_req, reply) => reply.header('Cache-Control', 'no-cache').type('text/html').send(fs.readFileSync(indexHtml)));
   app.setNotFoundHandler((req, reply) => {
-    if (req.url.startsWith('/api/')) {
+    if (req.url.startsWith('/api/') || req.url.startsWith('/assets/')) {
       return reply.status(404).send({ error: { code: 'not_found', message: 'Route not found' } });
     }
     if (hasWeb && req.method === 'GET') {

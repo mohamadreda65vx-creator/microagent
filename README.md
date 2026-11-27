@@ -1,7 +1,7 @@
 # MicroAgent
 
 Multi-tenant SaaS platform to create, teach and manage **AI Employees** for businesses.
-This repository currently contains **Part 1: Foundation & UI**. See [PROJECT_STATUS.md](PROJECT_STATUS.md) for exactly what is done and what is not.
+This repository contains Parts 1–5 (foundation, AI employees, channels, customers & campaigns, workflows/analytics/production prep). See [PROJECT_STATUS.md](PROJECT_STATUS.md) for exactly what is done and what is not.
 
 ## Stack
 
@@ -50,7 +50,7 @@ Production-style (single process): `npm run build && npm start` then open http:/
 npm test
 ```
 
-Runs the API integration tests against the `microagent_test` database (235 tests: customers & campaigns (Part 4), channels & conversations (Part 3), authentication, RBAC,
+Runs the API integration tests against the `microagent_test` database (312 tests: workflows, performance dashboard, super admin, security review; customers & campaigns (Part 4), channels & conversations (Part 3), authentication, RBAC,
 tenant isolation through the API and directly in PostgreSQL, the AI provider layer, the permissions engine
 and guards, business discovery, Teach & Correct, simulation and the activation gate). Tests use a local
 stand-in for OpenRouter (`apps/api/test/fake-openrouter.ts`); they never call the real service.
@@ -75,5 +75,9 @@ platform admin), `AI_TIMEOUT_MS`, `AI_MAX_RETRIES`. See `.env.example`.
 - `apps/api/migrations/*.sql` — database schema, RLS policies, auth functions
 - `apps/web/src/pages/*` — screens; `apps/web/src/components/*` — shared UI
 - `docs/ARCHITECTURE.md` — design decisions, schema, API list, security model
-- `docs/DEPLOY_HOSTINGER.md` — how to deploy
+- `DEPLOYMENT_GUIDE.md`, `ENVIRONMENT_VARIABLES.md`, `.env.production.example`, `infra/deploy/*` — deployment (Hostinger **VPS** required)
+- `docs/SECURITY_REVIEW.md`, `docs/LOAD_TEST_REPORT.md`, `docs/TESTING.md` — security findings, measured load results, how to run every test
 - `PROJECT_STATUS.md` — status and known gaps
+
+## Workflows, performance, super admin (Part 5)
+Workflow Builder: `/app/workflows` (needs `workflows:*` permissions; owner/admin activate). Performance: `/app/performance`. Platform admin: `/admin` (dashboard + subscriptions) and `/admin/companies`. Load test: `cd apps/api && node --import tsx test/load.ts [conversations|campaign|recovery|db]`. Manual browser harness: `node --import tsx test/e2e-part5.ts`.

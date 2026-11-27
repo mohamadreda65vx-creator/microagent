@@ -1,15 +1,16 @@
 # PROJECT_STATUS — MicroAgent
 
-**Part 1 (Foundation & UI): done.  Part 2 (AI Employees & Intelligence): implemented, tested against a local stand-in AI only.  Part 3 (Channels & Conversations): implemented and tested against LOCAL STAND-INS of Telegram / Evolution API / Meta Graph — no real provider has been reached.  Part 4 (Customers & AI Retargeting): implemented and tested against the same stand-ins and synthetic customers only — no real customer was messaged. Part 5: NOT started.**
-Last verified: 2026-11-23.
+**Part 1 (Foundation & UI): done.  Part 2 (AI Employees & Intelligence): implemented, tested against a local stand-in AI only.  Part 3 (Channels & Conversations): implemented and tested against LOCAL STAND-INS of Telegram / Evolution API / Meta Graph — no real provider has been reached.  Part 4 (Customers & AI Retargeting): implemented and tested against the same stand-ins and synthetic customers only — no real customer was messaged. Part 5 (Workflows, Analytics, Security, Load testing, Deployment prep): implemented and tested locally; NOT deployed anywhere.**
+Last verified: 2026-11-27.
 
 ## Verification summary
 
 | Check | Result |
 |---|---|
-| API integration tests (`npm test`) | 235 / 235 pass (Part 4 customers & campaigns: 67; Part 3 channels & conversations: 53; policy 19, AI layer 15, knowledge 14, agent runtime 31, platform AI 1, plus Part 1 suites incl. RLS guard) |
+| API integration tests (`npm test`) | 312 / 312 pass (Part 5: workflows 29, performance 11, super admin 8, security 29; Part 4 customers & campaigns: 67; Part 3 channels & conversations: 53; policy 19, AI layer 15, knowledge 14, agent runtime 31, platform AI 1, plus Part 1 suites incl. RLS guard) |
 | TypeScript typecheck (api + web) | clean |
 | Production build (`npm run build`) | OK |
+| Browser E2E, Part 5 (Chromium, stand-in providers, `apps/api/test/e2e-part5.ts` harness + a Playwright script that is not committed) | Workflow list → builder renders saved graph → Validate → dry Test run with step log → add node by click and by drag-and-drop → save (new version) → activation refused while invalid → versions list → fix → Activate → People-tasks page → Performance (filters, definitions, notes) → notifications bell → mobile 390 px (no horizontal scroll) → Super Admin dashboard → change a company's plan (list updates) → Companies page. Only expected console errors (401 before login, 422 on the refused activation). |
 | Browser E2E, Part 2 flows (Chromium, against stand-in AI) | 24 checks pass |
 | Browser E2E, Part 1 (business + admin) | 27 checks pass (earlier run) |
 | Browser E2E, Part 3 (Chromium, stand-in providers) | Login → Telegram section (list, open thread, AI answered, staff reply takes over, forward preview + send to second bot) → Website Chat section shows only the website visitor → WhatsApp section empty → unknown platform redirects → Channels page → mobile 390px (no horizontal scroll) → embed script on an external page opens the widget, visitor message arrives and is answered. Harness: `apps/api/test/e2e-server.ts` (manual, not an automated test) |
@@ -59,7 +60,6 @@ All AI tests use a local stand-in server (`FakeOpenRouter`, tests only). It prov
 - Delivery receipts: Telegram none. Leads/conversions depend on staff updating statuses (no orders/purchase integration; "previous purchases" = status customer).
 - No customer export/erasure, no cross-platform identity linking, no "send test to myself", audience cap 10,000, the campaign worker runs inside one API process, scheduled audience is frozen at approval (eligibility re-checked when sending).
 - The Arabic+English opt-out footer renders with mixed text direction on one line (cosmetic).
-- Part 5 not started.
 
 ## Not completed / known gaps (Part 3)
 
@@ -94,5 +94,50 @@ Not deployed to Hostinger (VPS required); SMTP untested against a real server; n
 ## Decisions to carry forward
 See `docs/ARCHITECTURE.md` §10 and §11–20 (Part 2).
 
-## Next
-Part 5 — **not started**. Before it: test Telegram with a real bot on a public HTTPS server, and (if wanted) an Evolution API server, and the real OpenRouter key.
+## Next (after Part 5)
+ Before it: test Telegram with a real bot on a public HTTPS server, and (if wanted) an Evolution API server, and the real OpenRouter key.
+
+# PART 5 — Workflows, Analytics, Security, Load testing, Deployment prep
+
+## Final report
+
+### Completed features (each exercised by automated tests and/or the browser run above)
+- **Visual Workflow Builder** (React Flow canvas, dark toolbar, nodes library, drag & drop or click-to-add, connections with labelled branch outputs, per-node settings forms, validation panel with clickable issues, mobile quick-add). 9 nodes with real backend logic: Trigger (manual, message received [platform/keywords], conversation handed to a person, customer status changed), AI Agent (write text / choose one option; really calls the AI, metered), Action (send message, add/remove tag, set customer/conversation status, hand over to a person, add note), Condition (safe rule evaluator, no `eval`), Delay (≤30 days, survives restarts), Notification (in-app, to roles), Human Task (approve / reject / timeout, role-enforced), Loop (count or list, ≤100), Subprocess (another active workflow; depth ≤3, cycles refused).
+- **Versioning**: immutable versions; save creates a version only if the graph changed; optimistic concurrency (409); restore = new version; live runs use the **activated** version only; activation requires zero validation errors and owner/admin.
+- **Test run**: dry run (nothing is sent, waits skipped, human tasks auto-answered with a chosen outcome); full step-by-step execution log; live runs and logs are listed per workflow; runs can be cancelled.
+- **Safety limits**: 200 steps/run, 60 live runs/workflow/minute (excess skipped and logged), idempotent steps (no double sends after crash/retry), workflow actions never trigger other workflows, send-message guards (channel connected, opt-out, unreachable, reply window, missing placeholders).
+- **Performance dashboard**: conversations, leads, qualified leads, order requests, conversions, human handoffs, unanswered messages, AI usage, AI cost (provider-reported only), campaign results; filters date / AI employee / platform / campaign; every tile shows its exact definition; limits of each metric stated on screen (e.g. AI usage ignores platform/campaign filters).
+- **Super Admin dashboard**: total/active tenants, AI employees, connected channels, message volume, AI consumption (+top companies), system errors, usage limits vs. plan per company, **subscription management** (plan, status, trial end, per-company limit overrides, audited). Counts and metadata only: the platform role cannot read messages, customers, credentials, campaigns or workflows (tested).
+- **Plan limits enforced**: AI employees and channels (402 `plan_limit`), campaign messages per month (blocks preview), AI tokens.
+- **Security review** with 29 adversarial tests; 5 findings fixed (see `docs/SECURITY_REVIEW.md`).
+- **Load / recovery tests** with real measurements (`docs/LOAD_TEST_REPORT.md`); two bottlenecks fixed (unanswered-messages query, missing time-range index).
+- **Deployment preparation**: production build verified and booted from a clean database; migrations; nginx, systemd, backup (tested restore), restore, health check scripts; `DEPLOYMENT_GUIDE.md`, `ENVIRONMENT_VARIABLES.md`, `.env.production.example`. **Hosting finding:** Hostinger web/cloud hosting cannot run this (no PostgreSQL); a **VPS is required**.
+- Bug found by the deployment rehearsal and fixed: production server answered 403 on `/`.
+
+### Incomplete features / not built
+- No payment processor: subscriptions are set manually by a platform admin; **plan limit numbers are my placeholder defaults** (`apps/api/src/shared/plans.ts`), not a pricing decision.
+- No generic HTTP/webhook node and no email/WhatsApp-notification node in workflows (in-app notifications only) — deliberate (not an n8n clone, no outbound calls to arbitrary URLs), but it limits integrations.
+- No order/payment system: "orders" are **order requests** recorded by AI employees; "conversions" are customers whose status was changed to *customer*; "qualified leads" = leads with a phone or email (no scoring). Leads/conversions depend on staff or workflows setting statuses.
+- Monthly message limit is enforced at campaign preview only, not on every conversational reply.
+- Workflow engine, campaign worker and message retry queue run inside the single API process; no separate worker, no multi-instance operation (untested).
+- Workflow builder: no undo/redo, no copy/paste, no auto-layout, no real-time collaboration (a conflict asks you to reload).
+- UI is English only; Chromium only; the Playwright scripts are not committed as automated tests.
+
+### Failed tests
+- **None at the end of this run: 312 / 312 API tests pass; browser run clean.** Failures seen and fixed during Part 5 (kept for honesty): trial plan limits capped unrelated suites (test helper now upgrades test tenants; limit tests use trial explicitly); RLS guard flagged new tables and caught `system_errors` without RLS (fixed, migration 0012); production `/` returned 403 (fixed); a run of my rehearsal reset the shared DB role passwords on the dev machine (restored; the setup script is for dedicated servers only).
+
+### Known limitations
+- **No real provider was ever called** (OpenRouter, Telegram, Evolution/WhatsApp, Meta): everything ran against local stand-ins written from public documentation. Real behaviour may differ.
+- Load numbers come from a 2-vCPU sandbox with fake providers and everything in one process; **no capacity is claimed** for any number of customers. Single-process design, ~200 inbound messages/s in that setup.
+- `/performance` scans the selected period's messages (~350 ms at 200k messages in one tenant); will need pre-aggregation at millions.
+- Security: no MFA, no external penetration test, in-memory rate limits (per process), shared unread counter resettable by viewers, uuid advisory (not reachable). Full list in `docs/SECURITY_REVIEW.md`.
+- Backups protect only if copied off the server and the `.env` key is saved separately.
+
+### Deployment requirements
+Hostinger **VPS** (Ubuntu, root), Node ≥ 20, PostgreSQL ≥ 14 with `citext`, nginx + HTTPS (mandatory: Secure cookies), a domain with an A record, one API process. Steps: `DEPLOYMENT_GUIDE.md`. **Nothing has been deployed; deployment happens only after your approval.**
+
+### Remaining credentials / integrations (none included in the project or the ZIP)
+OpenRouter API key · SMTP account · VPS + domain/DNS access · Telegram bot tokens (per channel) · Evolution API server (WhatsApp QR, unofficial) · Meta app + App Review + business verification (Messenger/Instagram) · WhatsApp Cloud API and TikTok are not implemented.
+
+### Production readiness — honest verdict
+**Not production-ready yet.** It is ready for a **private pilot on a VPS with a few friendly customers** once you (1) deploy with HTTPS and SMTP, (2) test each real provider with real accounts (Telegram first), (3) run the load script on the real VPS, (4) confirm plan limits/pricing, (5) restore-test a backup, and (6) accept the known limitations above. Passing tests and screens do not prove security or capacity; the evidence we have is listed above and is limited to local stand-ins.

@@ -117,11 +117,13 @@ export interface Tenant {
 }
 
 /** Sign up a brand-new business through the real endpoint. */
-export async function signupTenant(env: TestEnv, businessName: string): Promise<Tenant> {
+/** Test tenants get the 'scale' plan so unrelated suites are not capped by trial limits; pass {plan:'trial'} to test the real limits. */
+export async function signupTenant(env: TestEnv, businessName: string, opts: { plan?: string } = {}): Promise<Tenant> {
   const client = new Client(env.app);
   const email = uniqueEmail('owner');
   const res = await client.post('/auth/signup', { businessName, fullName: `Owner of ${businessName}`, email, password: PASSWORD });
   if (res.status !== 201) throw new Error(`signup failed: ${res.status} ${JSON.stringify(res.body)}`);
+  await env.owner.query(`UPDATE tenants SET plan = $1 WHERE id = $2`, [opts.plan ?? 'scale', res.body.tenant.id]);
   return { client, email, tenantId: res.body.tenant.id, userId: res.body.user.id, businessName };
 }
 

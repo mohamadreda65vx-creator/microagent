@@ -35,14 +35,20 @@ abstract class FakeServer {
           res.writeHead(f.reply.status, { 'content-type': 'application/json' }).end(JSON.stringify(f.reply.body));
           return;
         }
+        const respond = () => {
+        if (this.failRate && Math.random() < this.failRate) { res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: false, description: 'simulated failure' })); return; }
         const out = this.route(call);
         if (out.raw) res.writeHead(out.status, { 'content-type': out.contentType ?? 'application/octet-stream' }).end(out.raw);
         else res.writeHead(out.status, { 'content-type': 'application/json' }).end(JSON.stringify(out.body ?? {}));
+        };
+        if (this.latencyMs) setTimeout(respond, this.latencyMs); else respond();
       });
     });
     await new Promise<void>((r) => this.server.listen(0, '127.0.0.1', r));
     this.url = `http://127.0.0.1:${(this.server.address() as AddressInfo).port}`;
   }
+  /** Load tests: simulated provider latency and random 500s (retryable) on a fraction of calls. */
+  latencyMs = 0; failRate = 0;
   async stop() { await new Promise<void>((r) => this.server.close(() => r())); }
   failNext(match: string, status: number, body: unknown = {}) { this.failures.push({ match, reply: { status, body } }); }
   callsTo(substr: string) { return this.calls.filter((c) => `${c.method} ${c.path}`.includes(substr)); }

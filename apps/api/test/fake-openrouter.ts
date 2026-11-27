@@ -29,6 +29,8 @@ export class FakeOpenRouter {
   calls: FakeCall[] = [];
   private queue: FakeReply[] = [];
   /** Decides the model's answer when no one-shot reply is queued. Receives the parsed request body. */
+  /** Load tests: simulated model latency for every call that has no explicit one-shot delay. */
+  defaultDelayMs = 0;
   responder: (body: any) => string = () => '{"reply":"ok","actions":[]}';
 
   async start(): Promise<void> {
@@ -71,7 +73,8 @@ export class FakeOpenRouter {
     }
 
     const reply = this.queue.shift();
-    if (reply?.delayMs) await new Promise((r) => setTimeout(r, reply.delayMs));
+    const wait = reply?.delayMs ?? this.defaultDelayMs;
+    if (wait) await new Promise((r) => setTimeout(r, wait));
     const status = reply?.status ?? 200;
     for (const [k, v] of Object.entries(reply?.headers ?? {})) res.setHeader(k, v);
     res.setHeader('content-type', 'application/json');

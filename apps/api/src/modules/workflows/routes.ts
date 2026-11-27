@@ -189,6 +189,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const q = z.object({ mode: z.enum(['test', 'live']).optional(), status: z.enum(['queued', 'running', 'waiting', 'completed', 'failed', 'cancelled']).optional(), limit: z.coerce.number().int().min(1).max(100).default(30) }).parse(req.query);
     return app.tenantTx(req, async (c) => {
+      if (!(await c.query('SELECT 1 FROM workflows WHERE id = $1', [id])).rows[0]) throw notFound('Workflow not found');
       const { rows } = await c.query(`SELECT ${RUN_COLS.replace(/\bcontext,/, '')} FROM workflow_runs WHERE workflow_id = $1 AND ($2::text IS NULL OR mode = $2) AND ($3::text IS NULL OR status = $3) AND parent_run_id IS NULL ORDER BY created_at DESC LIMIT $4`, [id, q.mode ?? null, q.status ?? null, q.limit]);
       return { items: rows.map(({ trigger, ...r }: any) => ({ ...r, triggerSummary: { platform: trigger.platform ?? null, text: trigger.message?.text ?? null } })) };
     });

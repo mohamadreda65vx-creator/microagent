@@ -17,7 +17,7 @@ export interface Pools {
 }
 
 export function createPools(config: Config): Pools {
-  const app = new pg.Pool({ connectionString: config.db.app, max: 10, application_name: 'microagent-app' });
+  const app = new pg.Pool({ connectionString: config.db.app, max: Number(process.env.DB_POOL_MAX) || 10, application_name: 'microagent-app' });
   const platform = new pg.Pool({ connectionString: config.db.platform, max: 4, application_name: 'microagent-platform' });
   for (const p of [app, platform]) p.on('error', (err) => console.error('[pg pool error]', err.message));
   return {

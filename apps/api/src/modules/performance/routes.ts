@@ -70,7 +70,8 @@ export async function performanceRoutes(app: FastifyInstance): Promise<void> {
       const hand = await one(`WITH ${SCOPE} SELECT count(*) FILTER (WHERE a.action = 'conversation.handoff')::int AS handoffs, count(*) FILTER (WHERE a.action = 'conversation.takeover')::int AS takeovers
         FROM audit_logs a JOIN scope s ON s.id::text = a.entity_id WHERE a.action IN ('conversation.handoff', 'conversation.takeover') AND ${RANGE('a.created_at')}`);
       const unanswered = await one(`WITH ${SCOPE}, last AS (
-          SELECT DISTINCT ON (m.conversation_id) m.conversation_id, m.direction, m.created_at FROM messages m JOIN scope s ON s.id = m.conversation_id WHERE m.sender_type <> 'system' OR m.direction = 'in' ORDER BY m.conversation_id, m.created_at DESC, m.id DESC)
+          SELECT l.conversation_id, l.direction, l.created_at FROM scope s CROSS JOIN LATERAL (
+            SELECT m.conversation_id, m.direction, m.created_at FROM messages m WHERE m.conversation_id = s.id AND (m.sender_type <> 'system' OR m.direction = 'in') ORDER BY m.created_at DESC, m.id DESC LIMIT 1) l)
         SELECT count(*)::int AS n, min(l.created_at) AS oldest FROM last l JOIN conversations cv ON cv.id = l.conversation_id WHERE l.direction = 'in' AND cv.status <> 'resolved' AND l.created_at < now() - make_interval(mins => $6::int)`, [q.unansweredMinutes]);
       const ai = await one(`SELECT count(*)::int AS calls, count(*) FILTER (WHERE status = 'error')::int AS errors, COALESCE(sum(total_tokens), 0)::bigint AS tokens,
           COALESCE(sum(cost_usd) FILTER (WHERE cost_source = 'provider'), 0)::float8 AS cost, count(*) FILTER (WHERE cost_usd IS NULL)::int AS "unknownCost"

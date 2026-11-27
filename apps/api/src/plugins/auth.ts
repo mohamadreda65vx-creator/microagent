@@ -37,6 +37,7 @@ declare module 'fastify' {
     channels: ChannelManager;
     campaigns: CampaignEngine;
     workflows: WorkflowEngine;
+    routeTable: Array<{ method: string; url: string; rateLimited: boolean }>;
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requirePermission: (permission: Permission) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requirePlatformAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>;
